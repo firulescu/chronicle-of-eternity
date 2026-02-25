@@ -3696,4 +3696,96 @@ window.addEventListener('resize', () => {
 });
 </script>
 </body>
-</html>
+</html><script>
+// ===== MINIMAP FIX =====
+function rebuildMinimapTiles() {
+  const map = state.zones[state.zone];
+  const mc = document.getElementById('minimapCanvas');
+  if (!mc) return;
+  const mctx = mc.getContext('2d');
+  const W = mc.width, H = mc.height;
+  const scaleX = W / map.W, scaleY = H / map.H;
+  const pal = ['#3a7a28','#2a5a18','#c8a860','#1a5090','#706050','#c09030','#6aaa50','#a07840'];
+  mctx.clearRect(0,0,W,H);
+  for (let ty=0; ty<map.H; ty++) for (let tx=0; tx<map.W; tx++) {
+    const t = map.tiles[ty][tx];
+    mctx.fillStyle = pal[t] || '#333';
+    mctx.fillRect(Math.floor(tx*scaleX), Math.floor(ty*scaleY), Math.ceil(scaleX)+1, Math.ceil(scaleY)+1);
+  }
+}
+function drawMinimap() {
+  if (!drawMinimap._frame) drawMinimap._frame = 0;
+  drawMinimap._frame++;
+  const map = state.zones[state.zone];
+  const mc = document.getElementById('minimapCanvas');
+  if (!mc) return;
+  if (drawMinimap._zone !== state.zone) { drawMinimap._zone = state.zone; rebuildMinimapTiles(); }
+  if (drawMinimap._frame % 3 === 0) rebuildMinimapTiles();
+  const mctx = mc.getContext('2d');
+  const W = mc.width, H = mc.height;
+  const scaleX = W / map.W, scaleY = H / map.H;
+  // Player dot
+  const px = Math.floor(state.player.x / map.TILE * scaleX);
+  const py = Math.floor(state.player.y / map.TILE * scaleY);
+  mctx.fillStyle = '#ffffff'; mctx.fillRect(px-2,py-2,5,5);
+  mctx.fillStyle = '#00ff88'; mctx.fillRect(px-1,py-1,3,3);
+  // Other players
+  Object.values(window.otherPlayers||{}).forEach(p => {
+    if (p.zone !== state.zone) return;
+    const opx = Math.floor(p.x / map.TILE * scaleX);
+    const opy = Math.floor(p.y / map.TILE * scaleY);
+    mctx.fillStyle = '#4488ff'; mctx.fillRect(opx-1,opy-1,3,3);
+  });
+  // Enemies
+  state.entities.filter(e=>e.type==='enemy'&&e.zone===state.zone).forEach(e => {
+    const ex = Math.floor(e.x / map.TILE * scaleX);
+    const ey = Math.floor(e.y / map.TILE * scaleY);
+    mctx.fillStyle = '#ff4444'; mctx.fillRect(ex,ey,2,2);
+  });
+  // Zone label
+  const zl = document.getElementById('minimapZoneLabel');
+  if (zl) zl.textContent = state.zones[state.zone]?.name || '';
+}
+
+// ===== MULTIPLAYER =====
+const SERVER_URL='https://chronicle-of-eternity-3.onrender.com';
+let socket=null,otherPlayers={},mpConnected=false,pvpEnabled=false,pendingTrade=null,myTradeOffer=[],chatOpen=false;
+function connectMultiplayer(){
+  try{
+    socket=io(SERVER_URL,{transports:['websocket','polling'],timeout:10000});
+    socket.on('connect',()=>{mpConnected=true;addChatMsg('cm-system','🌐 Connected!');socket.emit('join',{name:state.player.name||'Wanderer',x:state.player.x,y:state.player.y,zone:state.zone,hp:state.player.hp,maxHp:state.player.maxHp,level:state.player.level});});
+    socket.on('disconnect',()=>{mpConnected=false;otherPlayers={};addChatMsg('cm-system','❌ Disconnected.');updateOnlineCount();});
+    socket.on('connect_error',()=>addChatMsg('cm-system','⚠ Server offline.'));
+    socket.on('init',d=>{otherPlayers={};d.players.forEach(p=>{if(p.id!==socket.id)otherPlayers[p.id]=p;});updateOnlineCount();});
+    socket.on('playerJoined',p=>{otherPlayers[p.id]=p;addChatMsg('cm-system','👋 '+p.name+' joined!');updateOnlineCount();});
+    socket.on('playerMoved',d=>{if(otherPlayers[d.id])Object.assign(otherPlayers[d.id],d);});
+    socket.on('syncPlayers',list=>{list.forEach(p=>{if(p.id!==socket?.id)otherPlayers[p.id]={...otherPlayers[p.id],...p};});const ids=new Set(list.map(p=>p.id));Object.keys(otherPlayers).forEach(id=>{if(!ids.has(id))delete otherPlayers[id];});updateOnlineCount();});
+    socket.on('playerLeft',d=>{const n=otherPlayers[d.id]?.name||'Someone';delete otherPlayers[d.id];addChatMsg('cm-system','👋 '+n+' left.');updateOnlineCount();});
+    socket.on('chatMsg',d=>addChatMsg(d.id===socket.id?'cm-self':'cm-other',d.name+': '+d.msg));
+    socket.on('pvpHit',d=>{state.player.hp=Math.max(0,d.newHp);updateHUD();});
+    socket.on('pvpKilled',d=>{state.player.hp=1;addChatMsg('cm-system','💀 Killed by '+d.byName+'!');updateHUD();});
+    socket.on('pvpRespawn',()=>{state.player.hp=state.player.maxHp;updateHUD();});
+    socket.on('pvpKill',d=>addChatMsg('cm-system','⚔ Defeated '+d.targetName+'!'));
+    socket.on('tradeRequested',d=>{pendingTrade=d;myTradeOffer=[];showTradeModal(d);});
+    socket.on('tradeCompleted',d=>{document.getElementById('tradeModal').style.display='none';addChatMsg('cm-system','✅ Trade done!');});
+    socket.on('tradeDeclined',d=>{document.getElementById('tradeModal').style.display='none';addChatMsg('cm-system','❌ Trade declined.');});
+  }catch(e){console.warn('MP:',e);}
+}
+let _lastMp=0;
+function sendMpUpdate(){if(!socket||!mpConnected)return;const now=Date.now();if(now-_lastMp<100)return;_lastMp=now;socket.emit('move',{x:state.player.x,y:state.player.y,zone:state.zone,hp:state.player.hp,maxHp:state.player.maxHp,level:state.player.level});}
+function addChatMsg(cls,text){let box=document.getElementById('mpChatBox');if(!box){box=document.createElement('div');box.id='mpChatBox';box.style.cssText='position:fixed;bottom:100px;left:10px;width:320px;max-height:160px;overflow-y:auto;background:rgba(0,0,0,0.7);border:1px solid #604020;padding:6px;font:11px monospace;color:#ddd;pointer-events:none;z-index:50;';document.body.appendChild(box);}const d=document.createElement('div');d.style.color=cls==='cm-system'?'#ffcc44':cls==='cm-other'?'#ddffaa':'#88ddff';d.textContent=text;box.appendChild(d);while(box.children.length>30)box.removeChild(box.firstChild);box.scrollTop=box.scrollHeight;}
+function updateOnlineCount(){let el=document.getElementById('mpOnlineCount');if(!el){el=document.createElement('div');el.id='mpOnlineCount';el.style.cssText='position:fixed;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);border:1px solid #604020;padding:3px 14px;font:10px monospace;color:#c09040;z-index:50;pointer-events:none;';document.body.appendChild(el);}el.textContent='🌐 '+(Object.keys(otherPlayers).length+1)+' online';}
+function togglePvP(){pvpEnabled=!pvpEnabled;const b=document.getElementById('mpPvpBtn');if(b){b.textContent=pvpEnabled?'⚔ PvP: ON':'⚔ PvP: OFF';b.style.background=pvpEnabled?'rgba(60,10,10,0.9)':'rgba(10,40,10,0.9)';}addChatMsg('cm-system',pvpEnabled?'⚔ PvP ON!':'🕊 PvP OFF.');}
+function drawAllOtherPlayers(){Object.values(otherPlayers).forEach(p=>{if(p.zone!==state.zone)return;const sx=p.x-state.camera.x,sy=p.y-state.camera.y;if(sx<-60||sx>canvas.width+60||sy<-60||sy>canvas.height+60)return;const bob=Math.sin(Date.now()/300)*2;ctx.fillStyle='rgba(0,0,0,0.3)';ctx.beginPath();ctx.ellipse(sx,sy+20,14,5,0,0,Math.PI*2);ctx.fill();ctx.fillStyle='#4488ff';ctx.fillRect(sx-8,sy-20+bob,16,20);ctx.fillStyle='#f0c080';ctx.fillRect(sx-7,sy-34+bob,14,14);ctx.fillStyle='#222';ctx.fillRect(sx-4,sy-29+bob,3,3);ctx.fillRect(sx+1,sy-29+bob,3,3);const hf=Math.max(0,(p.hp||100)/(p.maxHp||100));ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(sx-18,sy-42+bob,36,5);ctx.fillStyle=hf>0.5?'#44cc44':hf>0.25?'#ddaa00':'#cc2222';ctx.fillRect(sx-18,sy-42+bob,36*hf,5);ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(sx-24,sy-54+bob,48,13);ctx.fillStyle='#fff';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.fillText(p.name||'Player',sx,sy-43+bob);ctx.textAlign='left';if(p.chatMsg&&p.chatTimer&&Date.now()-p.chatTimer<5000){const msg=p.chatMsg.slice(0,25),bw=msg.length*7+12;ctx.fillStyle='rgba(255,255,255,0.9)';ctx.fillRect(sx-bw/2,sy-76+bob,bw,16);ctx.fillStyle='#222';ctx.font='10px monospace';ctx.textAlign='center';ctx.fillText(msg,sx,sy-63+bob);ctx.textAlign='left';}});}
+window.addEventListener('load',()=>{
+  updateOnlineCount();
+  const pvpBtn=document.createElement('div');pvpBtn.id='mpPvpBtn';pvpBtn.style.cssText='position:fixed;bottom:70px;right:10px;padding:5px 12px;font:10px monospace;background:rgba(10,40,10,0.9);border:1px solid #208020;color:#80ff80;cursor:pointer;z-index:50;';pvpBtn.textContent='⚔ PvP: OFF';pvpBtn.onclick=togglePvP;document.body.appendChild(pvpBtn);
+  const ci=document.createElement('input');ci.id='mpChatInput';ci.placeholder='Type and press Enter...';ci.style.cssText='position:fixed;bottom:70px;left:10px;width:300px;display:none;background:rgba(0,0,0,0.9);border:1px solid #8060a0;color:#fff;font:12px monospace;padding:5px 8px;z-index:51;outline:none;';document.body.appendChild(ci);
+  ci.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'){const m=ci.value.trim();if(m&&socket&&mpConnected)socket.emit('chat',{msg:m});ci.value='';ci.style.display='none';chatOpen=false;}if(e.key==='Escape'){ci.style.display='none';chatOpen=false;}});
+  window.addEventListener('keydown',e=>{if((e.key==='t'||e.key==='T')&&!chatOpen){e.preventDefault();chatOpen=true;ci.style.display='block';ci.focus();}},true);
+  setTimeout(connectMultiplayer,1500);
+  setInterval(()=>{if(typeof render==='function'&&!window._mpRenderHooked){window._mpRenderHooked=true;const _or=window.render;window.render=function(){_or();drawAllOtherPlayers();sendMpUpdate();};}},500);
+});
+canvas.addEventListener('contextmenu',e=>{if(!mpConnected)return;const wx=e.clientX+state.camera.x,wy=e.clientY+state.camera.y;Object.entries(otherPlayers).forEach(([id,p])=>{if(p.zone!==state.zone||Math.hypot(wx-p.x,wy-p.y)>60)return;e.preventDefault();e.stopImmediatePropagation();socket.emit('tradeRequest',{targetId:id,offer:[]});addChatMsg('cm-system','📦 Trade request sent!');});},true);
+setTimeout(connectMultiplayer,1500);
+</script>
