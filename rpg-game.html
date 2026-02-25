@@ -3815,31 +3815,3 @@ document.addEventListener('DOMContentLoaded', function() {
   // Override INV button to ensure it works
   setTimeout(function() {
     const btns = document.querySelectorAll('button, .hud-btn');
-    btns.forEach(b => { if(b.textContent.includes('INV')) b.onclick = () => toggleInventory(); });
-  }, 2000);
-});
-
-// Fix 2: Move fishing/mining UI higher up
-const _origDrawFishing = window.drawFishingUI;
-window._fishingYOverride = true;
-
-// Patch: intercept canvas fillRect for fishing panel to move it up
-const _origFillRect = CanvasRenderingContext2D.prototype.fillRect;
-</script>
-<script>
-// Fix 1: Inventory button
-document.addEventListener('DOMContentLoaded', function() {
-  // Override INV button to ensure it works
-  setTimeout(function() {
-    const btns = document.querySelectorAll('button, .hud-btn');
-    btns.forEach(b => { if(b.textContent.includes('INV')) b.onclick = () => toggleInventory(); });
-  }, 2000);
-});
-
-// Fix 2: Move fishing/mining UI higher up
-const _origDrawFishing = window.drawFishingUI;
-window._fishingYOverride = true;
-
-// Patch: intercept canvas fillRect for fishing panel to move it up
-const _origFillRect = CanvasRenderingContext2D.prototype.fillRect;
-</script>
