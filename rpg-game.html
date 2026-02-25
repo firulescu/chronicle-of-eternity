@@ -2562,9 +2562,9 @@ const DIALOGUES = {
     npcName: 'Fisher Nara',
     text: 'The waters here teem with life! Press M near any water to cast your line. The deeper the zone, the rarer the catch. I heard someone once pulled an Ancient Leviathan from the Crystal Lake!',
     options: [
-      { text: 'Browse your wares', action: 'shop' },
-      { text: 'What can I catch?', response: 'River Trout are common, but keep fishing deep waters for the Golden Koi and the legendary Leviathan. And sometimes... you pull up strange things.' },
-      { text: 'Farewell', action: 'close' },
+      { label: 'Browse wares', action: () => { closeDialogue(); const n = state.entities.find(e => e.name === 'Fisher Nara'); if(n) openShop(n); } },
+      { label: 'Farewell.', action: closeDialogue },
+      
     ]
   },
   armorer: {
@@ -4067,3 +4067,4 @@ function renderTradeBagPick(){
 function acceptTrade(){if(!pendingTrade||!socket)return;socket.emit('tradeAccept',{fromId:pendingTrade.fromId,counterOffer:myTradeOffer});}
 function declineTrade(){if(!pendingTrade||!socket)return;socket.emit('tradeDecline',{fromId:pendingTrade.fromId});document.getElementById('tradeModal').style.display='none';pendingTrade=null;myTradeOffer=[];}
 </script>
+<!-- fisher fix applied -->
