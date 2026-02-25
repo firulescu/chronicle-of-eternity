@@ -3788,5 +3788,4 @@ window.addEventListener('load',()=>{
 });
 canvas.addEventListener('contextmenu',e=>{if(!mpConnected)return;const wx=e.clientX+state.camera.x,wy=e.clientY+state.camera.y;Object.entries(otherPlayers).forEach(([id,p])=>{if(p.zone!==state.zone||Math.hypot(wx-p.x,wy-p.y)>60)return;e.preventDefault();e.stopImmediatePropagation();socket.emit('tradeRequest',{targetId:id,offer:[]});addChatMsg('cm-system','📦 Trade request sent!');});},true);
 setTimeout(connectMultiplayer,1500);
-</script>
 </script></body></html>
