@@ -1,0 +1,3699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chronicle of Eternity - Browser RPG</title>
+<!-- WalletConnect / Web3Modal for wallet login -->
+<!-- ethers.js loaded on demand when needed for on-chain features -->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a0f; color: #e0d4b0; font-family: 'Courier New', monospace; overflow: hidden; }
+  #gameContainer { display: flex; width: 100vw; height: 100vh; }
+  #gameCanvas { display: block; cursor: crosshair; }
+  #ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  
+  /* HUD */
+  #hud { position: absolute; top: 10px; left: 10px; pointer-events: none; }
+  .bar-container { margin-bottom: 4px; }
+  .bar-label { font-size: 10px; color: #aaa; letter-spacing: 1px; }
+  .bar { width: 180px; height: 14px; background: #1a1a2e; border: 1px solid #444; position: relative; }
+  .bar-fill { height: 100%; transition: width 0.2s; }
+  .hp-fill { background: linear-gradient(90deg, #8b0000, #cc2200); }
+  .mp-fill { background: linear-gradient(90deg, #00008b, #1a6acc); }
+  .xp-fill { background: linear-gradient(90deg, #5a3800, #c8860a); }
+  .bar-text { position: absolute; top: 0; left: 0; width: 100%; text-align: center; font-size: 9px; line-height: 14px; color: #fff; text-shadow: 1px 1px 0 #000; }
+  
+  #playerInfo { margin-bottom: 8px; }
+  #playerName { font-size: 14px; color: #f0c040; text-shadow: 0 0 8px #c8860a; letter-spacing: 2px; }
+  #playerLevel { font-size: 11px; color: #aaa; }
+
+  /* Minimap */
+  #minimap { position: absolute; top: 10px; right: 10px; width: 120px; height: 120px; border: 2px solid #444; background: #0d0d1a; }
+  #minimapCanvas { display: block; }
+  #minimapLabel { position: absolute; bottom: -18px; right: 0; font-size: 9px; color: #888; letter-spacing: 1px; }
+
+  /* Inventory Panel */
+  #inventory { position: absolute; right: 10px; top: 145px; width: 200px; background: rgba(10,10,20,0.92); border: 1px solid #3a3050; padding: 8px; display: none; pointer-events: all; }
+  #inventory h3 { font-size: 11px; color: #f0c040; border-bottom: 1px solid #3a3050; padding-bottom: 4px; margin-bottom: 6px; letter-spacing: 2px; }
+  .equipment-slots { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 8px; }
+  .equip-slot { width: 56px; height: 56px; background: #1a1a2e; border: 1px solid #3a3050; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8px; color: #666; cursor: pointer; position: relative; }
+  .equip-slot.filled { border-color: #6a5090; color: #c0a0f0; }
+  .equip-slot canvas { display: block; }
+  .slot-label { font-size: 7px; color: #555; margin-top: 2px; }
+  .bag-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+  .bag-item { width: 40px; height: 40px; background: #1a1a2e; border: 1px solid #2a2a3e; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; position: relative; }
+  .bag-item:hover { border-color: #6a5090; }
+  .item-count { position: absolute; bottom: 1px; right: 2px; font-size: 8px; color: #f0c040; }
+
+  /* Stats Panel */
+  #stats { position: absolute; left: 10px; top: 130px; width: 160px; background: rgba(10,10,20,0.92); border: 1px solid #3a3050; padding: 8px; display: none; pointer-events: all; }
+  #stats h3 { font-size: 11px; color: #f0c040; border-bottom: 1px solid #3a3050; padding-bottom: 4px; margin-bottom: 6px; letter-spacing: 2px; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 3px; }
+  .stat-name { color: #888; }
+  .stat-val { color: #e0d4b0; }
+
+  /* Quest Panel */
+  #questPanel { position: absolute; left: 10px; bottom: 80px; width: 220px; background: rgba(10,10,20,0.92); border: 1px solid #3a3050; padding: 8px; display: none; pointer-events: all; }
+  #questPanel h3 { font-size: 11px; color: #f0c040; border-bottom: 1px solid #3a3050; padding-bottom: 4px; margin-bottom: 6px; letter-spacing: 2px; }
+  .quest-item { font-size: 10px; color: #c0b090; margin-bottom: 4px; padding-left: 8px; border-left: 2px solid #5a3800; }
+  .quest-item.done { border-left-color: #286028; color: #70a070; }
+
+  /* Dialogue Box */
+  #dialogue { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); width: 500px; background: rgba(10,10,20,0.96); border: 2px solid #6a5090; padding: 12px; display: none; pointer-events: all; }
+  #dialogueNPC { font-size: 11px; color: #f0c040; margin-bottom: 4px; letter-spacing: 1px; }
+  #dialogueText { font-size: 11px; color: #c0b090; line-height: 1.6; margin-bottom: 8px; }
+  .dialogue-options { display: flex; flex-direction: column; gap: 4px; }
+  .dialogue-btn { background: #1a1a2e; border: 1px solid #3a3050; color: #a090d0; padding: 4px 8px; font-size: 10px; cursor: pointer; font-family: 'Courier New', monospace; text-align: left; }
+  .dialogue-btn:hover { background: #2a2a4e; border-color: #6a5090; }
+
+  /* Combat Log */
+  #combatLog { position: absolute; bottom: 10px; left: 10px; width: 280px; height: 65px; background: rgba(10,10,20,0.7); border: 1px solid #2a2a3e; overflow-y: auto; padding: 4px 6px; font-size: 9px; line-height: 1.6; }
+  .log-damage { color: #ff6060; }
+  .log-heal { color: #60cc60; }
+  .log-xp { color: #f0c040; }
+  .log-info { color: #8080cc; }
+  .log-quest { color: #c0a060; }
+
+  /* Hotbar */
+  #hotbar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: all; }
+  .hotkey { width: 48px; height: 48px; background: rgba(10,10,20,0.9); border: 1px solid #3a3050; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; position: relative; }
+  .hotkey:hover { border-color: #6a5090; }
+  .hotkey-num { position: absolute; top: 2px; left: 4px; font-size: 8px; color: #666; }
+  .hotkey-cd { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); text-align: center; font-size: 9px; color: #f0c040; display: none; }
+
+  /* Tooltip */
+  #tooltip { position: absolute; background: rgba(10,10,20,0.98); border: 1px solid #6a5090; padding: 8px; font-size: 10px; display: none; pointer-events: none; z-index: 100; max-width: 160px; }
+  #tooltip .tt-name { color: #f0c040; font-size: 11px; margin-bottom: 4px; }
+  #tooltip .tt-type { color: #a090d0; font-size: 9px; margin-bottom: 4px; }
+  #tooltip .tt-desc { color: #888; }
+  #tooltip .tt-stat { color: #60cc60; }
+
+  /* Shop Panel */
+  #shopPanel { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 620px; background: rgba(8,8,18,0.98); border: 2px solid #8a6020; display: none; pointer-events: all; z-index: 200; box-shadow: 0 0 40px rgba(200,140,0,0.3); }
+  #shopPanel .shop-header { background: linear-gradient(90deg, #1a1000, #2a1800, #1a1000); padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #8a6020; }
+  #shopPanel .shop-title { font-size: 14px; color: #f0c040; letter-spacing: 3px; text-shadow: 0 0 10px #c8860a; }
+  #shopPanel .shop-gold { font-size: 12px; color: #f0c040; }
+  #shopPanel .shop-close { background: none; border: 1px solid #8a6020; color: #f0c040; cursor: pointer; font-size: 14px; padding: 2px 8px; font-family: monospace; }
+  #shopPanel .shop-close:hover { background: #3a2000; }
+  #shopPanel .shop-tabs { display: flex; border-bottom: 1px solid #3a2800; }
+  #shopPanel .shop-tab { padding: 6px 16px; font-size: 10px; color: #888; cursor: pointer; letter-spacing: 1px; font-family: monospace; background: none; border: none; border-bottom: 2px solid transparent; }
+  #shopPanel .shop-tab:hover { color: #f0c040; }
+  #shopPanel .shop-tab.active { color: #f0c040; border-bottom-color: #f0c040; }
+  #shopPanel .shop-body { display: flex; height: 380px; }
+  #shopPanel .shop-list { flex: 1; overflow-y: auto; padding: 8px; border-right: 1px solid #2a1800; }
+  #shopPanel .shop-list::-webkit-scrollbar { width: 4px; }
+  #shopPanel .shop-list::-webkit-scrollbar-thumb { background: #8a6020; }
+  .shop-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid #2a1800; margin-bottom: 4px; cursor: pointer; background: rgba(20,12,0,0.5); }
+  .shop-item:hover { border-color: #8a6020; background: rgba(40,24,0,0.7); }
+  .shop-item.selected { border-color: #f0c040; background: rgba(60,36,0,0.7); }
+  .shop-item .si-icon { font-size: 20px; width: 28px; text-align: center; }
+  .shop-item .si-info { flex: 1; }
+  .shop-item .si-name { font-size: 11px; color: #e0d0b0; }
+  .shop-item .si-stats { font-size: 9px; color: #888; margin-top: 1px; }
+  .shop-item .si-price { font-size: 11px; color: #f0c040; white-space: nowrap; }
+  .shop-item .si-rarity { font-size: 8px; letter-spacing: 1px; }
+  #shopPanel .shop-detail { width: 190px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .sd-icon { font-size: 40px; text-align: center; }
+  .sd-name { font-size: 13px; color: #f0c040; text-align: center; }
+  .sd-rarity { font-size: 9px; text-align: center; letter-spacing: 1px; }
+  .sd-desc { font-size: 10px; color: #888; line-height: 1.5; }
+  .sd-stats { font-size: 10px; color: #60cc60; }
+  .sd-price { font-size: 12px; color: #f0c040; text-align: center; margin-top: auto; }
+  .sd-btn { padding: 7px; font-size: 11px; cursor: pointer; font-family: monospace; letter-spacing: 1px; border: none; width: 100%; }
+  .sd-btn.buy { background: linear-gradient(90deg, #3a2000, #5a3400); color: #f0c040; border: 1px solid #8a6020; }
+  .sd-btn.buy:hover { background: linear-gradient(90deg, #5a3000, #8a5000); }
+  .sd-btn.buy:disabled { opacity: 0.4; cursor: not-allowed; }
+  .sd-btn.sell { background: linear-gradient(90deg, #001a20, #002a30); color: #40c0f0; border: 1px solid #206080; }
+  .sd-btn.sell:hover { background: linear-gradient(90deg, #002030, #004050); }
+  .sd-btn.sell:disabled { opacity: 0.4; cursor: not-allowed; }
+  .shop-empty { color: #555; font-size: 11px; text-align: center; padding: 20px; }
+
+  /* ===== LOGIN SCREEN ===== */
+  #loginScreen {
+    position: fixed; inset: 0; z-index: 9999;
+    background: radial-gradient(ellipse at 50% 40%, #0d1a0d 0%, #050808 60%, #000 100%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: 'Courier New', monospace;
+  }
+  #loginScreen .ls-logo {
+    font-size: 38px; color: #f0c040;
+    text-shadow: 0 0 30px #c8860a, 0 0 60px #8b5000;
+    letter-spacing: 6px; margin-bottom: 8px;
+    animation: loginGlow 2s ease-in-out infinite alternate;
+  }
+  @keyframes loginGlow {
+    from { text-shadow: 0 0 20px #c8860a, 0 0 40px #8b5000; }
+    to   { text-shadow: 0 0 40px #f0c040, 0 0 80px #c8860a, 0 0 120px #8b5000; }
+  }
+  #loginScreen .ls-sub {
+    font-size: 11px; color: #6a5030; letter-spacing: 4px; margin-bottom: 60px;
+  }
+  #loginScreen .ls-card {
+    background: rgba(10,10,20,0.95);
+    border: 1px solid #3a2800;
+    padding: 32px 40px;
+    width: 340px;
+    box-shadow: 0 0 60px rgba(200,130,0,0.15);
+  }
+  #loginScreen .ls-title {
+    font-size: 12px; color: #888; letter-spacing: 3px;
+    text-align: center; margin-bottom: 24px;
+  }
+  #loginScreen .ls-wallet-btn {
+    width: 100%; padding: 14px;
+    background: linear-gradient(135deg, #1a0e00, #2a1800);
+    border: 1px solid #8a6020;
+    color: #f0c040; font-size: 13px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer; letter-spacing: 2px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  #loginScreen .ls-wallet-btn:hover {
+    background: linear-gradient(135deg, #2a1800, #4a2a00);
+    border-color: #f0c040;
+    box-shadow: 0 0 20px rgba(240,192,0,0.3);
+  }
+  #loginScreen .ls-wallet-btn:disabled {
+    opacity: 0.5; cursor: not-allowed;
+  }
+  #loginScreen .ls-wallet-btn .btn-icon { font-size: 20px; }
+  #loginScreen .ls-or {
+    text-align: center; font-size: 9px; color: #444;
+    letter-spacing: 2px; margin: 12px 0;
+  }
+  #loginScreen .ls-guest-btn {
+    width: 100%; padding: 10px;
+    background: rgba(30,30,50,0.8);
+    border: 1px solid #2a2a4a;
+    color: #6060a0; font-size: 11px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer; letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  #loginScreen .ls-guest-btn:hover { border-color: #4a4a8a; color: #9090d0; }
+  #loginScreen .ls-status {
+    margin-top: 16px; font-size: 10px; color: #888;
+    text-align: center; min-height: 16px; letter-spacing: 1px;
+  }
+  #loginScreen .ls-status.error { color: #cc4040; }
+  #loginScreen .ls-status.success { color: #40cc60; }
+  #loginScreen .ls-wallet-info {
+    display: none; flex-direction: column; gap: 12px;
+  }
+  #loginScreen .ls-address {
+    background: rgba(0,0,0,0.5); border: 1px solid #2a2a3a;
+    padding: 10px 12px; font-size: 10px; color: #6080a0;
+    letter-spacing: 1px; text-align: center; word-break: break-all;
+  }
+  #loginScreen .ls-address span { color: #a0c0f0; }
+  #loginScreen .ls-play-btn {
+    width: 100%; padding: 14px;
+    background: linear-gradient(135deg, #0a2a0a, #184018);
+    border: 1px solid #2a8a2a;
+    color: #40f040; font-size: 14px;
+    font-family: 'Courier New', monospace;
+    cursor: pointer; letter-spacing: 3px;
+    transition: all 0.2s;
+  }
+  #loginScreen .ls-play-btn:hover {
+    background: linear-gradient(135deg, #184018, #286028);
+    box-shadow: 0 0 20px rgba(64,240,64,0.3);
+  }
+  #loginScreen .ls-logout {
+    text-align: center; font-size: 9px; color: #444;
+    cursor: pointer; letter-spacing: 1px; margin-top: 4px;
+  }
+  #loginScreen .ls-logout:hover { color: #888; }
+  /* Animated particles bg */
+  #loginParticles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .lp { position: absolute; width: 2px; height: 2px; background: #f0c040; border-radius: 50%; opacity: 0; animation: lpFloat linear infinite; }
+  @keyframes lpFloat {
+    0%   { opacity: 0; transform: translateY(0) scale(1); }
+    10%  { opacity: 0.6; }
+    90%  { opacity: 0.2; }
+    100% { opacity: 0; transform: translateY(-80vh) scale(0.5); }
+  }
+
+  /* Wallet badge in HUD */
+  #walletBadge {
+    position: absolute; top: 10px; right: 145px;
+    background: rgba(10,10,20,0.9); border: 1px solid #3a2800;
+    padding: 4px 10px; font-size: 9px; color: #c8a040;
+    letter-spacing: 1px; display: none; pointer-events: all; cursor: pointer;
+  }
+  #walletBadge:hover { border-color: #f0c040; }
+
+  /* Zone Banner */
+  #zoneBanner { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; opacity: 0; transition: opacity 0.5s; pointer-events: none; }
+  #zoneBanner .zone-name { font-size: 28px; color: #f0c040; text-shadow: 0 0 20px #c8860a, 0 0 40px #8b5a00; letter-spacing: 4px; }
+  #zoneBanner .zone-sub { font-size: 12px; color: #888; letter-spacing: 3px; margin-top: 4px; }
+
+  /* Buttons */
+  #uiButtons { position: absolute; bottom: 68px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; pointer-events: all; }
+  .ui-btn { background: rgba(10,10,20,0.9); border: 1px solid #3a3050; color: #a090d0; padding: 3px 10px; font-size: 9px; cursor: pointer; font-family: 'Courier New', monospace; letter-spacing: 1px; }
+  .ui-btn:hover { border-color: #6a5090; color: #f0c040; }
+  .ui-btn.active { border-color: #f0c040; color: #f0c040; }
+
+  /* Level Up */
+  #levelUp { position: absolute; top: 40%; left: 50%; transform: translate(-50%,-50%); text-align: center; opacity: 0; pointer-events: none; transition: opacity 0.5s; }
+  #levelUp .lu-text { font-size: 32px; color: #f0c040; text-shadow: 0 0 30px #ffaa00; letter-spacing: 6px; animation: pulse 0.5s infinite alternate; }
+  @keyframes pulse { from { text-shadow: 0 0 20px #ffaa00; } to { text-shadow: 0 0 50px #ffdd00, 0 0 80px #ffaa00; } }
+</style>
+</head>
+<body>
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div id="loginParticles"></div>
+  <div class="ls-logo">⚔ CHRONICLE OF ETERNITY</div>
+  <div class="ls-sub">AN OPEN WORLD RPG</div>
+
+  <div class="ls-card">
+    <div class="ls-title">SELECT LOGIN METHOD</div>
+
+    <!-- Step 1: Choose -->
+    <div id="stepChoose">
+      <button class="ls-wallet-btn" id="btnAbstract" onclick="loginWithAbstract()">
+        <span class="btn-icon">🔮</span>
+        SIGN IN WITH ABSTRACT
+      </button>
+      <div class="ls-or">— OR —</div>
+      <button class="ls-guest-btn" onclick="loginAsGuest()">PLAY AS GUEST</button>
+    </div>
+
+    <!-- Step 2: No injected wallet found -->
+    <div id="stepNoWallet" style="display:none">
+      <div style="font-size:10px;color:#888;text-align:center;margin-bottom:14px;line-height:1.7;">
+        No wallet detected.<br>
+        <b style="color:#f0c040">Open this page inside your wallet app</b><br>
+        or paste your address below.
+      </div>
+      <a id="btnMetaMask" href="#" onclick="openInMetaMask(event)" class="ls-wallet-btn" style="text-decoration:none;display:flex;justify-content:center;gap:10px;margin-bottom:8px;">
+        <span>🦊</span> OPEN IN METAMASK
+      </a>
+      <a href="https://abs.xyz" target="_blank" class="ls-wallet-btn" style="text-decoration:none;display:flex;justify-content:center;gap:10px;margin-bottom:12px;border-color:#6040a0;color:#c080ff;">
+        <span>🔮</span> GET ABSTRACT WALLET
+      </a>
+      <div class="ls-or">— OR PASTE ADDRESS —</div>
+      <input id="manualAddr" type="text" placeholder="0x..." autocomplete="off" spellcheck="false" style="
+        width:100%;padding:10px;background:rgba(0,0,0,0.7);
+        border:1px solid #3a2800;color:#f0c040;font-size:12px;
+        font-family:monospace;box-sizing:border-box;margin-bottom:8px;outline:none;">
+      <button class="ls-wallet-btn" onclick="submitManualAddress()">
+        <span>▶</span> CONNECT ADDRESS
+      </button>
+      <div class="ls-logout" onclick="backToChoose()" style="margin-top:10px;">← Back</div>
+    </div>
+
+    <!-- Step 3: Connected -->
+    <div id="stepConnected" style="display:none">
+      <div style="font-size:11px;color:#40cc60;text-align:center;letter-spacing:2px;margin-bottom:12px;">✓ WALLET CONNECTED</div>
+      <div class="ls-address">
+        <span style="color:#888;font-size:9px;">ABSTRACT WALLET</span><br>
+        <span id="walletAddressDisplay" style="color:#a0c0ff;font-size:10px;">0x000...000</span>
+      </div>
+      <button class="ls-play-btn" onclick="startGame()">▶ ENTER WORLD</button>
+      <div class="ls-logout" onclick="logoutWallet()">Disconnect wallet</div>
+    </div>
+
+    <div class="ls-status" id="loginStatus"></div>
+  </div>
+
+  <div style="margin-top:28px;font-size:9px;color:#333;letter-spacing:2px;">
+    POWERED BY ABSTRACT GLOBAL WALLET
+  </div>
+</div>
+
+<!-- Wallet HUD badge (shown in game) -->
+<div id="walletBadge" onclick="showWalletInfo()">🔮 WALLET</div>
+
+<canvas id="gameCanvas"></canvas>
+<div id="ui">
+  <!-- HUD -->
+  <div id="hud">
+    <div id="playerInfo">
+      <div id="playerName">ARTORIUS</div>
+      <div id="playerLevel">Knight • Level <span id="levelDisplay">1</span></div>
+    </div>
+    <div class="bar-container">
+      <div class="bar-label">HP</div>
+      <div class="bar"><div class="bar-fill hp-fill" id="hpBar" style="width:100%"></div><div class="bar-text" id="hpText">100/100</div></div>
+    </div>
+    <div class="bar-container">
+      <div class="bar-label">MP</div>
+      <div class="bar"><div class="bar-fill mp-fill" id="mpBar" style="width:100%"></div><div class="bar-text" id="mpText">50/50</div></div>
+    </div>
+    <div class="bar-container">
+      <div class="bar-label">XP</div>
+      <div class="bar"><div class="bar-fill xp-fill" id="xpBar" style="width:0%"></div><div class="bar-text" id="xpText">0/100</div></div>
+    </div>
+  </div>
+
+  <!-- Minimap -->
+  <div id="minimap">
+    <canvas id="minimapCanvas" width="120" height="120"></canvas>
+    <div id="minimapLabel" id="zoneLabel">ELVEN RUINS</div>
+  </div>
+
+  <!-- Inventory -->
+  <div id="inventory">
+    <h3>⚔ INVENTORY</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;padding:4px 6px;background:rgba(240,192,0,0.1);border:1px solid #5a4000;">
+      <span style="font-size:10px;color:#f0c040;">💰 GOLD</span>
+      <span style="font-size:12px;color:#f0c040;font-weight:bold;" id="invGoldDisplay">150</span>
+    </div>
+    <div style="font-size:8px;color:#666;margin-bottom:6px;">Click equipped item to unequip</div>
+    <div class="equipment-slots">
+      <div class="equip-slot" id="slot-head" data-slot="head"><canvas width="40" height="40"></canvas><div class="slot-label">HEAD</div></div>
+      <div class="equip-slot" id="slot-chest" data-slot="chest"><canvas width="40" height="40"></canvas><div class="slot-label">CHEST</div></div>
+      <div class="equip-slot" id="slot-legs" data-slot="legs"><canvas width="40" height="40"></canvas><div class="slot-label">LEGS</div></div>
+      <div class="equip-slot" id="slot-weapon" data-slot="weapon"><canvas width="40" height="40"></canvas><div class="slot-label">WEAPON</div></div>
+      <div class="equip-slot" id="slot-offhand" data-slot="offhand"><canvas width="40" height="40"></canvas><div class="slot-label">SHIELD</div></div>
+      <div class="equip-slot" id="slot-boots" data-slot="boots"><canvas width="40" height="40"></canvas><div class="slot-label">BOOTS</div></div>
+    </div>
+    <h3 style="font-size:10px; margin-bottom:4px;">BAG</h3>
+    <div class="bag-grid" id="bagGrid"></div>
+  </div>
+
+  <!-- Stats -->
+  <div id="stats">
+    <h3>📊 STATS</h3>
+    <div class="stat-row"><span class="stat-name">STR</span><span class="stat-val" id="statStr">15</span></div>
+    <div class="stat-row"><span class="stat-name">DEX</span><span class="stat-val" id="statDex">12</span></div>
+    <div class="stat-row"><span class="stat-name">INT</span><span class="stat-val" id="statInt">8</span></div>
+    <div class="stat-row"><span class="stat-name">CON</span><span class="stat-val" id="statCon">14</span></div>
+    <div class="stat-row"><span class="stat-name">ATK</span><span class="stat-val" id="statAtk">18</span></div>
+    <div class="stat-row"><span class="stat-name">DEF</span><span class="stat-val" id="statDef">10</span></div>
+    <div class="stat-row"><span class="stat-name">SPEED</span><span class="stat-val" id="statSpd">3.0</span></div>
+    <div class="stat-row"><span class="stat-name">GOLD</span><span class="stat-val" id="statGold">150</span></div>
+  </div>
+
+  <!-- Quests -->
+  <div id="questPanel">
+    <h3>📜 QUESTS</h3>
+    <div id="questList"></div>
+  </div>
+
+  <!-- Shop Panel -->
+  <div id="shopPanel">
+    <div class="shop-header">
+      <div class="shop-title" id="shopTitle">⚒ BLACKSMITH DORN</div>
+      <div class="shop-gold">💰 <span id="shopGoldDisplay">0</span> Gold</div>
+      <button class="shop-close" onclick="closeShop()">✕ CLOSE</button>
+    </div>
+    <div class="shop-tabs">
+      <button class="shop-tab active" id="tab-buy" onclick="switchShopTab('buy')">BUY</button>
+      <button class="shop-tab" id="tab-sell" onclick="switchShopTab('sell')">SELL</button>
+    </div>
+    <div class="shop-body">
+      <div class="shop-list" id="shopList"></div>
+      <div class="shop-detail" id="shopDetail">
+        <div class="shop-empty">Select an item</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialogue -->
+  <div id="dialogue">
+    <div id="dialogueNPC">NPC</div>
+    <div id="dialogueText"></div>
+    <div class="dialogue-options" id="dialogueOptions"></div>
+  </div>
+
+  <!-- Combat Log -->
+  <div id="combatLog"></div>
+
+  <!-- UI Buttons -->
+  <div id="uiButtons">
+    <button class="ui-btn" onclick="togglePanel('inventory')">INV</button>
+    <button class="ui-btn" onclick="togglePanel('stats')">STATS</button>
+    <button class="ui-btn" onclick="togglePanel('questPanel')">QUEST</button>
+    <button class="ui-btn" id="shopBtn" onclick="openNearbyShop()">SHOP</button>
+    <button class="ui-btn" onclick="saveWalletProgress()" title="Save progress (F5)">💾 SAVE</button>
+  </div>
+
+  <!-- Hotbar -->
+  <div id="hotbar">
+    <div class="hotkey" onclick="useSkill(0)"><div class="hotkey-num">1</div>⚔<div class="hotkey-cd" id="cd0"></div></div>
+    <div class="hotkey" onclick="useSkill(1)"><div class="hotkey-num">2</div>🛡<div class="hotkey-cd" id="cd1"></div></div>
+    <div class="hotkey" onclick="useSkill(2)"><div class="hotkey-num">3</div>✨<div class="hotkey-cd" id="cd2"></div></div>
+    <div class="hotkey" onclick="useSkill(3)"><div class="hotkey-num">4</div>🧪<div class="hotkey-cd" id="cd3"></div></div>
+    <div class="hotkey" onclick="useSkill(4)"><div class="hotkey-num">5</div>💨<div class="hotkey-cd" id="cd4"></div></div>
+  </div>
+
+  <!-- Tooltip -->
+  <div id="tooltip"></div>
+
+  <!-- Zone Banner -->
+  <div id="zoneBanner">
+    <div class="zone-name" id="zoneNameBig"></div>
+    <div class="zone-sub" id="zoneSubBig"></div>
+  </div>
+
+  <!-- Level Up -->
+  <div id="levelUp"><div class="lu-text">LEVEL UP!</div></div>
+</div>
+
+<script>
+// ===== ABSTRACT GLOBAL WALLET LOGIN =====
+let walletSession = { connected: false, address: null, isGuest: false };
+
+// Floating particles on login screen
+function spawnLoginParticles() {
+  const container = document.getElementById('loginParticles');
+  if (!container) return;
+  for (let i = 0; i < 28; i++) {
+    const p = document.createElement('div');
+    p.className = 'lp';
+    p.style.left = Math.random() * 100 + 'vw';
+    p.style.top = Math.random() * 100 + 'vh';
+    p.style.animationDuration = (7 + Math.random() * 12) + 's';
+    p.style.animationDelay = (Math.random() * 8) + 's';
+    container.appendChild(p);
+  }
+}
+spawnLoginParticles();
+
+function setLoginStatus(msg, type) {
+  const el = document.getElementById('loginStatus');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'ls-status ' + (type || '');
+}
+
+function showStep(step) {
+  ['stepChoose','stepNoWallet','stepConnected'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const target = document.getElementById(step);
+  if (target) target.style.display = 'block';
+  setLoginStatus('', '');
+}
+
+function backToChoose() {
+  showStep('stepChoose');
+  const btn = document.getElementById('btnAbstract');
+  if (btn) btn.disabled = false;
+}
+
+async function loginWithAbstract() {
+  const btn = document.getElementById('btnAbstract');
+  if (btn) btn.disabled = true;
+  setLoginStatus('Checking for wallet...', '');
+
+  try {
+    // Look for injected Web3 provider (MetaMask Mobile, Abstract Wallet app in-app browser, etc.)
+    const provider = window.ethereum || window.web3?.currentProvider;
+
+    if (provider) {
+      setLoginStatus('Connecting...', '');
+      const accounts = await provider.request({ method: 'eth_requestAccounts' });
+      if (accounts && accounts.length > 0) {
+        onWalletConnected(accounts[0]);
+        return;
+      }
+    }
+
+    // No injected wallet — show options
+    showStep('stepNoWallet');
+
+    // Set up the MetaMask deep link with current page URL
+    const btn2 = document.getElementById('btnMetaMask');
+    if (btn2) {
+      const pageUrl = encodeURIComponent(window.location.href);
+      btn2.href = `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`;
+    }
+
+  } catch (err) {
+    if (err.code === 4001) {
+      // User rejected
+      setLoginStatus('Connection cancelled.', 'error');
+      if (btn) btn.disabled = false;
+    } else {
+      // Unknown error — show options
+      showStep('stepNoWallet');
+    }
+  }
+}
+
+function openInMetaMask(e) {
+  e.preventDefault();
+  // MetaMask deep link — opens page inside MetaMask Mobile browser
+  const url = window.location.href;
+  const mmUrl = 'https://metamask.app.link/dapp/' + url.replace('https://','').replace('http://','');
+  window.location.href = mmUrl;
+}
+
+function submitManualAddress() {
+  const input = document.getElementById('manualAddr');
+  const addr = (input ? input.value : '').trim();
+  if (!addr.match(/^0x[0-9a-fA-F]{40}$/)) {
+    setLoginStatus('Invalid address. Must start with 0x followed by 40 characters.', 'error');
+    return;
+  }
+  onWalletConnected(addr);
+}
+
+function onWalletConnected(address) {
+  walletSession.address = address;
+  walletSession.connected = true;
+  walletSession.isGuest = false;
+
+  // Show address shortened
+  const short = address.slice(0, 6) + '...' + address.slice(-4);
+  const display = document.getElementById('walletAddressDisplay');
+  if (display) display.textContent = short;
+
+  showStep('stepConnected');
+
+  // Check for saved progress
+  const saved = loadWalletProgress(address);
+  if (saved) {
+    setLoginStatus('Save data found! Ready to load your character.', 'success');
+  } else {
+    setLoginStatus('New wallet — starting fresh!', 'success');
+  }
+}
+
+function logoutWallet() {
+  walletSession = { connected: false, address: null, isGuest: false };
+  showStep('stepChoose');
+  const btn = document.getElementById('btnAbstract');
+  if (btn) btn.disabled = false;
+  if (window.ethereum) {
+    window.ethereum.request({ method: 'wallet_revokePermissions', params: [{ eth_accounts: {} }] }).catch(() => {});
+  }
+}
+
+function loginAsGuest() {
+  // Use a persistent guest ID stored in localStorage so progress is saved between sessions
+  let guestId = localStorage.getItem('coe_guest_id');
+  if (!guestId) {
+    guestId = 'Guest_' + Math.random().toString(36).slice(2, 10).toUpperCase();
+    localStorage.setItem('coe_guest_id', guestId);
+  }
+  walletSession.address = guestId;
+  walletSession.connected = false;
+  walletSession.isGuest = true;
+  // Load any existing guest save
+  loadWalletProgress(guestId);
+  setLoginStatus('Welcome back, adventurer!', 'success');
+  setTimeout(startGame, 600);
+}
+
+function loadWalletProgress(address) {
+  try {
+    const raw = localStorage.getItem('coe_save_' + address);
+    if (!raw) return false;
+    window._pendingSave = JSON.parse(raw);
+    return true;
+  } catch(e) { return false; }
+}
+
+function saveWalletProgress() {
+  if (!walletSession.address) return; // saves for both wallet and guest
+  if (typeof state === 'undefined') return;
+  try {
+    const save = {
+      level: state.player.level, xp: state.player.xp, xpNext: state.player.xpNext,
+      gold: state.player.gold, hp: state.player.hp, maxHp: state.player.maxHp,
+      mp: state.player.mp, maxMp: state.player.maxMp,
+      atk: state.player.atk, def: state.player.def,
+      str: state.player.str, dex: state.player.dex,
+      equipment: Object.fromEntries(
+        Object.entries(state.player.equipment).map(([k,v]) => [k, v ? v.id : null])
+      ),
+      bag: state.player.bag.filter(Boolean).map(i => ({ id: i.id, count: i.count || 1 })),
+      zone: state.zone,
+      quests: state.quests,
+      savedAt: Date.now(),
+    };
+    localStorage.setItem('coe_save_' + walletSession.address, JSON.stringify(save));
+    if (typeof addLog === 'function') addLog('Progress saved! 💾', 'xp');
+  } catch(e) { console.warn('Save failed:', e); }
+}
+
+function applyWalletSave(save) {
+  if (!save || typeof state === 'undefined') return;
+  console.log('[Save] Applying save: level', save.level, 'gold', save.gold);
+  const p = state.player;
+
+  // Clear default starting equipment so save can fully restore
+  p.equipment = { head: null, chest: null, legs: null, weapon: null, offhand: null, boots: null };
+  p.bag = [];
+
+  p.level  = save.level  || 1;
+  p.xp     = save.xp     || 0;
+  p.xpNext = save.xpNext || 100;
+  p.gold   = save.gold   || 150;
+  p.maxHp  = save.maxHp  || 100;
+  p.hp     = Math.min(save.hp !== undefined ? save.hp : p.maxHp, p.maxHp);
+  p.maxMp  = save.maxMp  || 50;
+  p.mp     = Math.min(save.mp !== undefined ? save.mp : p.maxMp, p.maxMp);
+  p.atk    = save.atk    || 18;
+  p.def    = save.def    || 10;
+  p.str    = save.str    || 15;
+  p.dex    = save.dex    || 12;
+  p.speed  = save.speed  || 3;
+
+  // Restore equipment
+  if (save.equipment) {
+    Object.entries(save.equipment).forEach(([slot, id]) => {
+      p.equipment[slot] = id && ITEMS[id] ? ITEMS[id] : null;
+    });
+  }
+
+  // Restore bag
+  if (save.bag && save.bag.length > 0) {
+    p.bag = save.bag
+      .map(e => e && e.id && ITEMS[e.id] ? {...ITEMS[e.id], count: e.count || 1} : null)
+      .filter(Boolean);
+  }
+
+  // Restore quests
+  if (save.quests && save.quests.length > 0) state.quests = save.quests;
+
+  // Restore zone
+  if (save.zone !== undefined && save.zone !== state.zone) {
+    changeZone(save.zone);
+  }
+
+  // Refresh all UI
+  updateHUD();
+  updateStats();
+  updateGoldDisplay();
+  updateInventoryUI();
+  updateQuestPanel();
+
+  const ago = save.savedAt ? Math.round((Date.now() - save.savedAt) / 60000) : null;
+  const agoStr = ago !== null ? (ago < 1 ? ' (just now)' : ` (${ago}m ago)`) : '';
+  addLog('✅ Save loaded! Level ' + p.level + ' · ' + p.gold + 'G' + agoStr, 'xp');
+}
+
+function startGame() {
+  const screen = document.getElementById('loginScreen');
+  screen.style.transition = 'opacity 0.7s';
+  screen.style.opacity = '0';
+  setTimeout(() => {
+    screen.style.display = 'none';
+    // Show wallet badge
+    const badge = document.getElementById('walletBadge');
+    if (badge) {
+      badge.style.display = 'block';
+      if (walletSession.isGuest) {
+        badge.textContent = '👤 GUEST';
+        badge.style.color = '#808080';
+        badge.style.borderColor = '#333';
+      } else {
+        const short = walletSession.address.slice(0,6) + '...' + walletSession.address.slice(-4);
+        badge.textContent = '🔮 ' + short;
+      }
+    }
+    if (window._pendingSave) {
+      // Give the game loop 2 full frames to render, then apply save
+      // This guarantees starting equipment is set before we override it
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        applyWalletSave(window._pendingSave);
+        window._pendingSave = null;
+      }));
+    } else {
+      // New player — starting equipment already applied, just log it
+      addLog('New adventure begins! Starting equipment equipped.', 'info');
+    }
+  }, 700);
+}
+
+function showWalletInfo() {
+  if (walletSession.isGuest) {
+    alert('You are playing as a Guest.\nWallet login saves your progress between sessions!');
+    return;
+  }
+  const save = localStorage.getItem('coe_save_' + walletSession.address);
+  const savedAt = save ? new Date(JSON.parse(save).savedAt).toLocaleString() : 'Never';
+  if (confirm('Wallet: ' + walletSession.address + '\nLast saved: ' + savedAt + '\n\nSave progress now?')) {
+    saveWalletProgress();
+  }
+}
+
+// Auto-save every 2 minutes when in-game
+setInterval(() => {
+  if (document.getElementById('loginScreen')?.style.display === 'none') saveWalletProgress();
+}, 120000);
+
+window.addEventListener('beforeunload', saveWalletProgress);
+
+// ===== GAME ENGINE =====
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// ===== GAME STATE =====
+const state = {
+  zone: 0,
+  camera: { x: 0, y: 0 },
+  player: {
+    x: 400, y: 400,
+    hp: 100, maxHp: 100,
+    mp: 50, maxMp: 50,
+    xp: 0, xpNext: 100,
+    level: 1, gold: 150,
+    str: 15, dex: 12, int: 8, con: 14,
+    atk: 18, def: 10, speed: 3,
+    facing: 'down',
+    moving: false,
+    animFrame: 0,
+    animTimer: 0,
+    equipment: { head: null, chest: null, legs: null, weapon: null, offhand: null, boots: null },
+    bag: [],
+    skills: [
+      { name: 'Power Strike', cd: 0, maxCd: 2000, dmgMult: 1.8, mpCost: 8 },
+      { name: 'Shield Bash', cd: 0, maxCd: 3000, dmgMult: 1.2, stun: true, mpCost: 5 },
+      { name: 'Holy Light', cd: 0, maxCd: 5000, heal: 40, mpCost: 15 },
+      { name: 'Potion', cd: 0, maxCd: 8000, heal: 30, mpCost: 0 },
+      { name: 'Dash', cd: 0, maxCd: 4000, dash: true, mpCost: 10 }
+    ],
+    target: null,
+    attackTimer: 0,
+    invincible: 0,
+    particles: []
+  },
+  keys: {},
+  mouse: { x: 0, y: 0, clicked: false },
+  entities: [],
+  floatTexts: [],
+  quests: [],
+  lastTime: 0,
+  zones: [],
+  transitioning: false
+};
+
+// ===== ZONES =====
+const ZONE_DEFS = [
+  { name: 'ELVEN RUINS',     sub: 'Ancient Grounds',       bgColor: '#0b1a0b', grassColor: '#1a3020', pathColor: '#2a2018', wallColor: '#3a5030', waterColor: '#1a4060', hasWater: true,  hasMine: false, hasFishing: true  },
+  { name: 'DARK FOREST',     sub: 'Cursed Woods',          bgColor: '#080d08', grassColor: '#0d1a0d', pathColor: '#1a1808', wallColor: '#1a2a15', waterColor: '#0d2030', hasWater: true,  hasMine: false, hasFishing: true  },
+  { name: 'IRON MOUNTAINS',  sub: 'Highlands and Mines',   bgColor: '#141010', grassColor: '#2a2020', pathColor: '#302820', wallColor: '#504040', waterColor: '#203050', hasWater: true,  hasMine: true,  hasFishing: false },
+  { name: 'CRYSTAL CAVES',   sub: 'Underground Depths',    bgColor: '#080814', grassColor: '#18182e', pathColor: '#1a1828', wallColor: '#2a2850', waterColor: '#101840', hasWater: false, hasMine: true,  hasFishing: false },
+  { name: 'SUNKEN MARSHES',  sub: 'Flooded Lowlands',      bgColor: '#0a100a', grassColor: '#1a2810', pathColor: '#1e1a10', wallColor: '#2a3820', waterColor: '#102820', hasWater: true,  hasMine: false, hasFishing: true  },
+  { name: 'VOLCANIC DEPTHS', sub: 'Heart of the Mountain', bgColor: '#180808', grassColor: '#2a1010', pathColor: '#3a1808', wallColor: '#502010', waterColor: '#401008', hasWater: false, hasMine: true,  hasFishing: false },
+];
+
+// ===== ITEMS =====
+// Rarity tiers: common=0, uncommon=1, rare=2, epic=3
+const RARITY = {
+  0: { name: 'Common',   color: '#c0c0c0', glow: null },
+  1: { name: 'Uncommon', color: '#40cc40', glow: '#20aa20' },
+  2: { name: 'Rare',     color: '#4080ff', glow: '#2060dd' },
+  3: { name: 'Epic',     color: '#cc40ff', glow: '#aa20dd' },
+};
+
+const ITEMS = {
+  // CONSUMABLES
+  healthPotion:  { id:'healthPotion',  name:'Health Potion',     type:'consumable', icon:'🧪', color:'#cc2200', heal:50,       price:40,   desc:'Restores 50 HP.',              rarity:0 },
+  mpPotion:      { id:'mpPotion',      name:'Mana Potion',       type:'consumable', icon:'💧', color:'#1a6acc', mp:30,         price:35,   desc:'Restores 30 MP.',              rarity:0 },
+  greatPotion:   { id:'greatPotion',   name:'Greater Potion',    type:'consumable', icon:'🧪', color:'#ff4400', heal:120,      price:110,  desc:'Restores 120 HP.',             rarity:1 },
+  elixir:        { id:'elixir',        name:'Full Elixir',       type:'consumable', icon:'✨', color:'#ffaa00', heal:300,mp:100,price:300, desc:'Full HP and MP restore.',      rarity:2 },
+  // WEAPONS - Common
+  shortSword:    { id:'shortSword',    name:'Short Sword',       type:'weapon', icon:'🗡', color:'#aaaaaa', atk:8,  price:60,   desc:'+8 ATK. Light and fast.',              rarity:0 },
+  woodStaff:     { id:'woodStaff',     name:'Wooden Staff',      type:'weapon', icon:'🪄', color:'#8b6040', atk:6,  price:45,   desc:'+6 ATK. Carved oak staff.',           rarity:0 },
+  huntingBow:    { id:'huntingBow',    name:'Hunting Bow',       type:'weapon', icon:'🏹', color:'#a07040', atk:10, price:75,   desc:'+10 ATK. Ranged strikes.',            rarity:0 },
+  // WEAPONS - Uncommon
+  longSword:     { id:'longSword',     name:'Long Sword',        type:'weapon', icon:'🗡', color:'#c0d0ff', atk:14, price:150,  desc:'+14 ATK. A reliable blade.',          rarity:1 },
+  battleAxe:     { id:'battleAxe',     name:'Battle Axe',        type:'weapon', icon:'🪓', color:'#c08040', atk:16, price:180,  desc:'+16 ATK. Heavy and brutal.',          rarity:1 },
+  ironMace:      { id:'ironMace',      name:'Iron Mace',         type:'weapon', icon:'🔨', color:'#888888', atk:13, price:130,  desc:'+13 ATK. Crushes armor.',             rarity:1 },
+  // WEAPONS - Rare
+  warblade:      { id:'warblade',      name:'Warblade',          type:'weapon', icon:'⚔',  color:'#80c0ff', atk:22, price:380,  desc:'+22 ATK. A warrior blade.',           rarity:2 },
+  crystalWand:   { id:'crystalWand',   name:'Crystal Wand',      type:'weapon', icon:'🔮', color:'#80aaff', atk:20, price:350,  desc:'+20 ATK. Arcane power.',              rarity:2 },
+  runicBlade:    { id:'runicBlade',    name:'Runic Blade',       type:'weapon', icon:'⚔',  color:'#a040ff', atk:26, price:500,  desc:'+26 ATK. Ancient runes etched.',      rarity:2 },
+  // WEAPONS - Epic
+  greatsword:    { id:'greatsword',    name:'Greatsword',        type:'weapon', icon:'⚔',  color:'#cc40ff', atk:32, price:900,  desc:'+32 ATK. Legendary blade.',           rarity:3 },
+  voidReaper:    { id:'voidReaper',    name:'Void Reaper',       type:'weapon', icon:'⚔',  color:'#ff20ff', atk:40, price:1500, desc:'+40 ATK. Tears the void.',            rarity:3 },
+  dragonFang:    { id:'dragonFang',    name:'Dragon Fang',       type:'weapon', icon:'🔱', color:'#ff6020', atk:38, price:1400, desc:'+38 ATK. A dragon tooth blade.',      rarity:3 },
+  // ARMOR - Common
+  ironHelm:      { id:'ironHelm',      name:'Iron Helm',         type:'head',    icon:'⛑', color:'#888888', def:3,  price:50,   desc:'+3 DEF.',                             rarity:0 },
+  leatherChest:  { id:'leatherChest',  name:'Leather Chest',     type:'chest',   icon:'🥋', color:'#8b6040', def:5,  price:80,   desc:'+5 DEF. Supple leather.',             rarity:0 },
+  chainLegs:     { id:'chainLegs',     name:'Chain Legs',        type:'legs',    icon:'👖', color:'#888888', def:4,  price:70,   desc:'+4 DEF. Chainmail leggings.',         rarity:0 },
+  ironBoots:     { id:'ironBoots',     name:'Iron Boots',        type:'boots',   icon:'👟', color:'#888888', def:2,spd:0.2,price:45, desc:'+2 DEF +0.2 SPD.',               rarity:0 },
+  woodShield:    { id:'woodShield',    name:'Wood Shield',       type:'offhand', icon:'🛡', color:'#8b6040', def:6,  price:60,   desc:'+6 DEF. Sturdy oak shield.',          rarity:0 },
+  // ARMOR - Uncommon
+  steelHelm:     { id:'steelHelm',     name:'Steel Helm',        type:'head',    icon:'⛑', color:'#70a0d0', def:7,  price:130,  desc:'+7 DEF. Forged steel.',               rarity:1 },
+  chainMail:     { id:'chainMail',     name:'Chain Mail',        type:'chest',   icon:'🧥', color:'#70a0d0', def:10, price:200,  desc:'+10 DEF. Interlocked rings.',         rarity:1 },
+  steelLegs:     { id:'steelLegs',     name:'Steel Greaves',     type:'legs',    icon:'👖', color:'#70a0d0', def:8,  price:180,  desc:'+8 DEF. Forged steel.',               rarity:1 },
+  swiftBoots:    { id:'swiftBoots',    name:'Swift Boots',       type:'boots',   icon:'👟', color:'#70a0d0', def:3,spd:0.5,price:160, desc:'+3 DEF +0.5 SPD.',               rarity:1 },
+  ironShield:    { id:'ironShield',    name:'Iron Shield',       type:'offhand', icon:'🛡', color:'#70a0d0', def:10, price:220,  desc:'+10 DEF. Heavy iron plate.',          rarity:1 },
+  // ARMOR - Rare
+  plateMail:     { id:'plateMail',     name:'Plate Mail',        type:'chest',   icon:'🧥', color:'#4080ff', def:16, price:480,  desc:'+16 DEF. Full plate armor.',          rarity:2 },
+  towerShield:   { id:'towerShield',   name:'Tower Shield',      type:'offhand', icon:'🛡', color:'#4080ff', def:18, price:520,  desc:'+18 DEF. Massive protection.',        rarity:2 },
+  knightHelm:    { id:'knightHelm',    name:'Knight Helm',       type:'head',    icon:'⛑', color:'#4080ff', def:12, price:400,  desc:'+12 DEF. A knight honour.',           rarity:2 },
+  runicLegs:     { id:'runicLegs',     name:'Runic Greaves',     type:'legs',    icon:'👖', color:'#4080ff', def:14, price:420,  desc:'+14 DEF. Runic carvings.',            rarity:2 },
+  // ARMOR - Epic
+  dragonMail:    { id:'dragonMail',    name:'Dragon Mail',       type:'chest',   icon:'🧥', color:'#cc40ff', def:22, price:1200, desc:'+22 DEF. Dragon scale armor.',        rarity:3 },
+  shadowHelm:    { id:'shadowHelm',    name:'Shadow Helm',       type:'head',    icon:'⛑', color:'#cc40ff', def:16, price:950,  desc:'+16 DEF. Darkness incarnate.',        rarity:3 },
+  voidBoots:     { id:'voidBoots',     name:'Void Boots',        type:'boots',   icon:'👟', color:'#cc40ff', def:6,spd:1.0,price:800, desc:'+6 DEF +1.0 SPD.',               rarity:3 },
+  titanLegs:     { id:'titanLegs',     name:'Titan Greaves',     type:'legs',    icon:'👖', color:'#ff8020', def:20, price:1100, desc:'+20 DEF. Forged by titans.',          rarity:3 },
+  // MINING RESOURCES
+  coalOre:       { id:'coalOre',       name:'Coal Ore',          type:'resource', icon:'🪨', color:'#404040', price:5,   desc:'Chunk of coal. Used for crafting.',    rarity:0 },
+  ironOre:       { id:'ironOre',       name:'Iron Ore',          type:'resource', icon:'🪨', color:'#808080', price:12,  desc:'Raw iron ore. Smelt to use.',          rarity:0 },
+  goldOre:       { id:'goldOre',       name:'Gold Ore',          type:'resource', icon:'🪨', color:'#d4a010', price:40,  desc:'Gleaming gold ore.',                   rarity:1 },
+  silverOre:     { id:'silverOre',     name:'Silver Ore',        type:'resource', icon:'🪨', color:'#c0c0e0', price:25,  desc:'Shimmering silver ore.',               rarity:1 },
+  crystalShard:  { id:'crystalShard',  name:'Crystal Shard',     type:'resource', icon:'💎', color:'#80c0ff', price:60,  desc:'A glowing crystal fragment.',          rarity:2 },
+  ruby:          { id:'ruby',          name:'Ruby Gemstone',     type:'resource', icon:'💎', color:'#ff2040', price:150, desc:'A flawless ruby. Extremely rare.',     rarity:2 },
+  emerald:       { id:'emerald',       name:'Emerald Gem',       type:'resource', icon:'💎', color:'#20cc60', price:130, desc:'A vivid green emerald.',               rarity:2 },
+  diamond:       { id:'diamond',       name:'Diamond',           type:'resource', icon:'💎', color:'#c0f0ff', price:400, desc:'The rarest gem. Pure brilliance.',     rarity:3 },
+  lavaCrystal:   { id:'lavaCrystal',   name:'Lava Crystal',      type:'resource', icon:'🔥', color:'#ff4010', price:200, desc:'Crystallized volcanic energy.',        rarity:3 },
+  // FISHING DROPS
+  commonFish:    { id:'commonFish',    name:'River Trout',       type:'fish', icon:'🐟', color:'#4088ff', price:8,   heal:20,        desc:'A fresh river trout. +20 HP.',        rarity:0 },
+  silverFish:    { id:'silverFish',    name:'Silver Carp',       type:'fish', icon:'🐟', color:'#a0c0ff', price:20,  heal:40,        desc:'A shimmering carp. +40 HP.',          rarity:1 },
+  goldenFish:    { id:'goldenFish',    name:'Golden Koi',        type:'fish', icon:'🐠', color:'#ffc020', price:80,  heal:80,        desc:'Legendary golden koi. +80 HP.',       rarity:2 },
+  ancientFish:   { id:'ancientFish',   name:'Ancient Leviathan', type:'fish', icon:'🦈', color:'#cc40ff', price:300, heal:200,mp:50, desc:'Mythical catch! +200 HP +50 MP.',     rarity:3 },
+  poisonFish:    { id:'poisonFish',    name:'Poison Puffer',     type:'fish', icon:'🐡', color:'#60cc20', price:15,              desc:'Toxic. Best sold for gold.',          rarity:0 },
+  enchantedFish: { id:'enchantedFish', name:'Enchanted Bass',    type:'fish', icon:'🐠', color:'#80ffcc', price:120, mp:80,        desc:'Glows softly. +80 MP.',               rarity:2 },
+  bottleMsg:     { id:'bottleMsg',     name:'Bottle with Note',  type:'fish', icon:'🍾', color:'#c0a060', price:50,              desc:'A mysterious message inside.',        rarity:1 },
+  oldBoot:       { id:'oldBoot',       name:'Old Boot',          type:'junk', icon:'👢', color:'#604020', price:1,               desc:'Someone lost this. Worthless.',       rarity:0 },
+  sunkenChest:   { id:'sunkenChest',   name:'Sunken Chest',      type:'fish', icon:'📦', color:'#d4a010', price:200,             desc:'A waterlogged treasure chest!',       rarity:3 },
+};
+
+// ===== LOOT TABLES by enemy tier =====
+// Each entry: [itemId, weight, minTier, maxTier]
+const LOOT_TABLES = {
+  0: [
+    {id:'healthPotion',weight:40},{id:'mpPotion',weight:25},{id:'shortSword',weight:15},
+    {id:'ironHelm',weight:10},{id:'leatherChest',weight:10},{id:'chainLegs',weight:8},
+    {id:'woodShield',weight:8},{id:'ironBoots',weight:5},{id:'longSword',weight:3},
+    {id:'huntingBow',weight:4},{id:'coalOre',weight:20},{id:'ironOre',weight:10},
+  ],
+  1: [
+    {id:'healthPotion',weight:25},{id:'mpPotion',weight:18},{id:'longSword',weight:18},
+    {id:'battleAxe',weight:12},{id:'chainMail',weight:14},{id:'steelHelm',weight:12},
+    {id:'ironShield',weight:12},{id:'steelLegs',weight:10},{id:'swiftBoots',weight:8},
+    {id:'warblade',weight:4},{id:'ironOre',weight:20},{id:'goldOre',weight:8},
+    {id:'silverOre',weight:10},{id:'greatPotion',weight:6},
+  ],
+  2: [
+    {id:'healthPotion',weight:18},{id:'greatPotion',weight:14},{id:'warblade',weight:16},
+    {id:'runicBlade',weight:8},{id:'plateMail',weight:14},{id:'towerShield',weight:12},
+    {id:'knightHelm',weight:12},{id:'runicLegs',weight:10},{id:'greatsword',weight:5},
+    {id:'dragonMail',weight:4},{id:'crystalShard',weight:12},{id:'ruby',weight:6},
+    {id:'emerald',weight:6},{id:'diamond',weight:2},
+  ],
+  3: [
+    {id:'elixir',weight:20},{id:'greatsword',weight:12},{id:'voidReaper',weight:8},
+    {id:'dragonFang',weight:8},{id:'dragonMail',weight:10},{id:'shadowHelm',weight:10},
+    {id:'voidBoots',weight:10},{id:'titanLegs',weight:10},{id:'diamond',weight:10},
+    {id:'lavaCrystal',weight:12},{id:'ruby',weight:10},{id:'crystalShard',weight:8},
+  ],
+};
+
+// Ground loot bags dropped on death
+state.groundLoot = [];
+// Fishing state
+state.fishing = { active: false, spot: null, timer: 0, bobTimer: 0, caught: false, catchItem: null };
+// Mining state
+state.mining = { active: false, node: null, timer: 0, progress: 0 };
+
+// ===== FISHING SYSTEM =====
+function startFishing(spot) {
+  if (state.fishing.active) return;
+  const dist = Math.hypot(state.player.x - spot.x, state.player.y - spot.y);
+  if (dist > 80) { addLog('Move closer to the fishing spot!', 'info'); return; }
+  state.fishing = { active: true, spot, timer: 0, waitTime: 2000 + Math.random()*4000, bobTimer: 0, caught: false, catchItem: null };
+  addLog('🎣 Fishing... wait for the bite!', 'info');
+}
+
+function updateFishing(dt) {
+  const f = state.fishing;
+  if (!f.active) return;
+  f.timer += dt * 1000;
+  f.bobTimer += dt;
+  if (f.timer >= f.waitTime && !f.caught) {
+    f.caught = true;
+    f.catchItem = rollFishingDrop(state.zone);
+    addLog('🐟 BITE! Press F to reel in!', 'xp');
+  }
+}
+
+function reelIn() {
+  const f = state.fishing;
+  if (!f.active) return;
+  if (!f.caught) { addLog('No bite yet, keep waiting...', 'info'); return; }
+  const item = f.catchItem;
+  const r = RARITY[item.rarity];
+  if (state.player.bag.length < 24) {
+    state.player.bag.push({...item, count:1});
+    addLog('Caught ' + item.name + '! [' + r.name + ']', item.rarity >= 2 ? 'xp' : 'info');
+    updateInventoryUI();
+  } else {
+    addLog('Bag full! Lost your catch.', 'info');
+  }
+  state.fishing = { active:false, spot:null, timer:0, bobTimer:0, caught:false, catchItem:null };
+}
+
+function rollFishingDrop(zoneIdx) {
+  const tables = [
+    [{id:'commonFish',w:50},{id:'silverFish',w:20},{id:'goldenFish',w:8},{id:'poisonFish',w:15},{id:'oldBoot',w:20},{id:'bottleMsg',w:10},{id:'enchantedFish',w:5},{id:'ancientFish',w:2},{id:'sunkenChest',w:1}],
+    [{id:'commonFish',w:40},{id:'silverFish',w:25},{id:'goldenFish',w:12},{id:'enchantedFish',w:10},{id:'bottleMsg',w:15},{id:'ancientFish',w:4},{id:'sunkenChest',w:3},{id:'oldBoot',w:10}],
+    [{id:'silverFish',w:30},{id:'goldenFish',w:20},{id:'enchantedFish',w:15},{id:'ancientFish',w:8},{id:'sunkenChest',w:8},{id:'bottleMsg',w:12},{id:'commonFish',w:20}],
+  ];
+  const table = tables[Math.min(zoneIdx, tables.length-1)];
+  const total = table.reduce((s,e)=>s+e.w,0);
+  let roll = Math.random()*total;
+  for (const e of table) { roll-=e.w; if(roll<=0) return {...ITEMS[e.id],count:1}; }
+  return {...ITEMS.commonFish,count:1};
+}
+
+// ===== MINING SYSTEM =====
+const MINE_DROPS = {
+  0: [{id:'coalOre',w:60},{id:'ironOre',w:30},{id:'silverOre',w:8},{id:'goldOre',w:4},{id:'crystalShard',w:2}],
+  1: [{id:'ironOre',w:40},{id:'goldOre',w:25},{id:'silverOre',w:20},{id:'crystalShard',w:10},{id:'ruby',w:3},{id:'emerald',w:3},{id:'diamond',w:1}],
+  2: [{id:'crystalShard',w:35},{id:'ruby',w:20},{id:'emerald',w:20},{id:'diamond',w:8},{id:'goldOre',w:20}],
+  3: [{id:'lavaCrystal',w:40},{id:'diamond',w:20},{id:'ruby',w:25},{id:'crystalShard',w:20}],
+};
+
+function startMining(mx, my) {
+  const map = state.zones[state.zone];
+  const tx = Math.floor(mx/map.TILE), ty = Math.floor(my/map.TILE);
+  if (map.tiles[ty] && map.tiles[ty][tx] === 5) {
+    const dist = Math.hypot(state.player.x - mx, state.player.y - my);
+    if (dist > 80) { addLog('Move closer to the mine node!', 'info'); return; }
+    state.mining = { active:true, node:{tx,ty,wx:mx,wy:my}, timer:0, progress:0, mineTime: 2500 };
+    addLog('⛏ Mining...', 'info');
+  }
+}
+
+function updateMining(dt) {
+  const m = state.mining;
+  if (!m.active) return;
+  m.progress += dt * 1000;
+  if (m.progress >= m.mineTime) {
+    const tierMap = {0:0,1:0,2:1,3:2,4:1,5:3};
+    const tier = tierMap[state.zone] || 0;
+    const table = MINE_DROPS[tier];
+    const total = table.reduce((s,e)=>s+e.w,0);
+    let roll = Math.random()*total;
+    let item;
+    for (const e of table) { roll-=e.w; if(roll<=0){item={...ITEMS[e.id],count:1};break;} }
+    if (!item) item={...ITEMS.coalOre,count:1};
+    if (state.player.bag.length < 24) {
+      state.player.bag.push(item);
+      const r = RARITY[item.rarity];
+      addLog('⛏ Mined: ' + item.name + '! [' + r.name + ']', item.rarity >= 2 ? 'xp' : 'info');
+      updateInventoryUI();
+      // Deplete node temporarily
+      const map = state.zones[state.zone];
+      map.tiles[m.node.ty][m.node.tx] = 4; // becomes mountain
+      setTimeout(()=>{ if(map.tiles[m.node.ty]) map.tiles[m.node.ty][m.node.tx]=5; }, 30000);
+    } else {
+      addLog('Bag full! Resource lost.', 'info');
+    }
+    state.mining = {active:false,node:null,timer:0,progress:0};
+  }
+}
+
+function rollLoot(tier) {
+  const table = LOOT_TABLES[tier] || LOOT_TABLES[0];
+  const totalWeight = table.reduce((s, e) => s + e.weight, 0);
+  let roll = Math.random() * totalWeight;
+  for (const entry of table) {
+    roll -= entry.weight;
+    if (roll <= 0) return {...ITEMS[entry.id], count: 1};
+  }
+  return {...ITEMS['healthPotion'], count: 1};
+}
+
+function spawnGroundLoot(x, y, tier, gold) {
+  // How many items to drop
+  const numItems = tier === 0 ? (Math.random() < 0.5 ? 1 : 0)
+                 : tier === 1 ? (Math.random() < 0.7 ? 1 : 2)
+                 : (1 + (Math.random() < 0.4 ? 1 : 0));
+  const items = [];
+  for (let i = 0; i < numItems; i++) items.push(rollLoot(tier));
+
+  if (items.length > 0 || gold > 0) {
+    state.groundLoot.push({
+      x: x + (Math.random()-0.5)*20,
+      y: y + (Math.random()-0.5)*20,
+      items,
+      gold,
+      life: 1800, // 30s before despawn
+      pulse: 0,
+      collected: false,
+    });
+  }
+}
+
+// ===== MAP GENERATION =====
+// Tile types: 0=grass 1=wall/tree 2=path 3=deep_water 4=mountain 5=mine_node 6=shallow_water
+function generateMap(zoneIdx) {
+  const TILE = 32;
+  const W = 80, H = 80;
+  const tiles = [];
+  const z = ZONE_DEFS[zoneIdx];
+
+  // Deterministic per-cell noise
+  function rnd(x, y) {
+    let h = (zoneIdx * 2654435761 + x * 374761393 + y * 1234567891) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+    return ((h ^ (h >>> 16)) >>> 0) / 0xffffffff;
+  }
+
+  // Fill with grass
+  for (let y = 0; y < H; y++) {
+    tiles[y] = [];
+    for (let x = 0; x < W; x++) tiles[y][x] = 0;
+  }
+
+  // --- RIVERS ---
+  if (z.hasWater) {
+    const numRivers = zoneIdx === 4 ? 2 : 1;
+    for (let r = 0; r < numRivers; r++) {
+      const startY = Math.floor(H * (0.2 + r * 0.45));
+      for (let x = 0; x < W; x++) {
+        const wave = Math.round(6 * Math.sin(x * 0.15 + r * 2.0 + zoneIdx));
+        const cy = startY + wave;
+        for (let w = -1; w <= 2; w++) {
+          const ty = cy + w;
+          if (ty >= 1 && ty < H - 1) {
+            tiles[ty][x] = (w === -1 || w === 2) ? 6 : 3;
+          }
+        }
+      }
+    }
+    // Lake
+    const lx = 12 + Math.floor(rnd(10,10) * (W - 24));
+    const ly = 12 + Math.floor(rnd(11,11) * (H - 24));
+    const lrx = 6 + Math.floor(rnd(12,12) * 6);
+    const lry = 4 + Math.floor(rnd(13,13) * 5);
+    for (let dy = -lry-1; dy <= lry+1; dy++) {
+      for (let dx = -lrx-1; dx <= lrx+1; dx++) {
+        const dist = (dx/lrx)*(dx/lrx) + (dy/lry)*(dy/lry);
+        const ty = ly + dy, tx = lx + dx;
+        if (ty >= 1 && ty < H-1 && tx >= 1 && tx < W-1) {
+          if (dist < 1.0) tiles[ty][tx] = 3;
+          else if (dist < 1.35) tiles[ty][tx] = 6;
+        }
+      }
+    }
+  }
+
+  // --- MOUNTAINS + MINE NODES ---
+  if (z.hasMine) {
+    for (let i = 0; i < 55; i++) {
+      const mx = 4 + Math.floor(rnd(i*3+1, 0) * (W - 8));
+      const my = 4 + Math.floor(rnd(i*3+1, 1) * (H * 0.45));
+      const sz = 2 + Math.floor(rnd(i*3+1, 2) * 4);
+      for (let dy = -sz; dy <= sz; dy++) {
+        for (let dx = -sz; dx <= sz; dx++) {
+          if ((dx*dx + dy*dy) < sz*sz*1.4 && rnd(mx+dx, my+dy) < 0.85) {
+            const ty = my + dy, tx = mx + dx;
+            if (ty >= 1 && ty < H-1 && tx >= 1 && tx < W-1 && tiles[ty][tx] !== 3)
+              tiles[ty][tx] = 4;
+          }
+        }
+      }
+    }
+    // Place mine nodes in mountain areas
+    let placed = 0;
+    for (let y = 2; y < H-2 && placed < 18; y++) {
+      for (let x = 2; x < W-2 && placed < 18; x++) {
+        if (tiles[y][x] === 4 && rnd(x*7, y*7) < 0.09) {
+          tiles[y][x] = 5;
+          placed++;
+        }
+      }
+    }
+  }
+
+  // --- PATHS ---
+  const midY = Math.floor(H/2), midX = Math.floor(W/2);
+  for (let x = 0; x < W; x++) if (tiles[midY][x] <= 2) tiles[midY][x] = 2;
+  for (let y = 0; y < H; y++) if (tiles[y][midX] <= 2) tiles[y][midX] = 2;
+  // Diagonal scenic path
+  for (let i = 0; i < W; i++) {
+    const px2 = i, py2 = Math.floor(H*0.75 + Math.sin(i*0.12)*5);
+    if (py2 >= 0 && py2 < H && tiles[py2][px2] === 0) tiles[py2][px2] = 2;
+  }
+
+  // --- TREES/WALLS ---
+  const density = 0.06 + zoneIdx * 0.01;
+  for (let y = 1; y < H-1; y++) {
+    for (let x = 1; x < W-1; x++) {
+      if (tiles[y][x] === 0 && rnd(x+100, y+100) < density) tiles[y][x] = 1;
+    }
+  }
+
+  // --- CLEAR SPAWN AREA ---
+  for (let dy = -5; dy <= 5; dy++) {
+    for (let dx = -5; dx <= 5; dx++) {
+      const ty = midY+dy, tx = midX+dx;
+      if (ty >= 0 && ty < H && tx >= 0 && tx < W) tiles[ty][tx] = 0;
+    }
+  }
+
+  // --- EXITS ---
+  const exits = [];
+  if (zoneIdx < ZONE_DEFS.length - 1)
+    exits.push({ x: (W-3)*TILE, y: midY*TILE, toZone: zoneIdx+1, label: '→ '+ZONE_DEFS[zoneIdx+1].name });
+  if (zoneIdx > 0)
+    exits.push({ x: 2*TILE, y: midY*TILE, toZone: zoneIdx-1, label: '← '+ZONE_DEFS[zoneIdx-1].name });
+
+  // Clear around exits
+  exits.forEach(e => {
+    const ex = Math.floor(e.x/TILE), ey = Math.floor(e.y/TILE);
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const ty = ey+dy, tx = ex+dx;
+        if (ty >= 0 && ty < H && tx >= 0 && tx < W) tiles[ty][tx] = 0;
+      }
+    }
+  });
+
+  // --- FISHING SPOTS (adjacent to water) ---
+  const fishingSpots = [];
+  if (z.hasFishing) {
+    for (let y = 1; y < H-1; y++) {
+      for (let x = 1; x < W-1; x++) {
+        if (tiles[y][x] === 0) {
+          const adj = [tiles[y-1][x], tiles[y+1][x], tiles[y][x-1], tiles[y][x+1]];
+          if (adj.some(t => t === 3 || t === 6) && rnd(x*17+3, y*13+5) < 0.2) {
+            fishingSpots.push({ x: x*TILE, y: y*TILE });
+          }
+        }
+      }
+    }
+  }
+
+  return { tiles, W, H, TILE, exits, fishingSpots: fishingSpots || [], ...z };
+}
+
+state.zones = [0,1,2,3,4,5].map(i => generateMap(i));
+
+// ===== ENEMY TYPES =====
+const ENEMY_TYPES = [
+  // Zone 0 - Elven Ruins (tier 0)
+  { name: 'Goblin Scout',   color: '#4a8a30', hp: 30,  atk: 8,  def: 2,  xp: 20,  gold: [1,5],    speed: 2.8, size: 14, tier: 0, zone: 0 },
+  { name: 'Forest Imp',     color: '#8a6020', hp: 22,  atk: 6,  def: 1,  xp: 15,  gold: [1,4],    speed: 3.2, size: 12, tier: 0, zone: 0 },
+  { name: 'Vine Creeper',   color: '#206020', hp: 45,  atk: 10, def: 4,  xp: 30,  gold: [2,7],    speed: 1.5, size: 18, tier: 0, zone: 0 },
+  // Zone 1 - Dark Forest (tier 0-1)
+  { name: 'Dark Orc',       color: '#5a3a80', hp: 60,  atk: 14, def: 5,  xp: 45,  gold: [3,10],   speed: 2.0, size: 20, tier: 0, zone: 1 },
+  { name: 'Wild Wolf',      color: '#604020', hp: 40,  atk: 12, def: 3,  xp: 35,  gold: [2,8],    speed: 3.5, size: 16, tier: 0, zone: 1 },
+  { name: 'Forest Troll',   color: '#306030', hp: 120, atk: 20, def: 10, xp: 80,  gold: [8,20],   speed: 1.5, size: 26, tier: 1, zone: 1 },
+  { name: 'Swamp Witch',    color: '#604080', hp: 80,  atk: 18, def: 6,  xp: 70,  gold: [6,16],   speed: 2.0, size: 18, tier: 1, zone: 1 },
+  // Zone 2 - Iron Mountains (tier 1)
+  { name: 'Stone Gargoyle', color: '#706060', hp: 150, atk: 22, def: 14, xp: 110, gold: [12,28],  speed: 1.8, size: 24, tier: 1, zone: 2 },
+  { name: 'Mountain Ogre',  color: '#805040', hp: 180, atk: 25, def: 12, xp: 130, gold: [15,35],  speed: 1.4, size: 28, tier: 1, zone: 2 },
+  // Zone 3 - Crystal Caves (tier 2)
+  { name: 'Shadow Knight',  color: '#3a3060', hp: 200, atk: 28, def: 15, xp: 150, gold: [15,40],  speed: 2.2, size: 22, tier: 2, zone: 3 },
+  { name: 'Crystal Golem',  color: '#4060a0', hp: 280, atk: 30, def: 20, xp: 200, gold: [20,50],  speed: 1.3, size: 28, tier: 2, zone: 3 },
+  { name: 'Ancient Golem',  color: '#506080', hp: 400, atk: 35, def: 25, xp: 300, gold: [30,80],  speed: 1.2, size: 32, tier: 2, zone: 3 },
+  // Zone 4 - Sunken Marshes (tier 1-2)
+  { name: 'Bog Serpent',    color: '#205840', hp: 100, atk: 20, def: 8,  xp: 90,  gold: [10,25],  speed: 2.6, size: 20, tier: 1, zone: 4 },
+  { name: 'Plague Zombie',  color: '#4a6030', hp: 70,  atk: 16, def: 4,  xp: 60,  gold: [5,15],   speed: 1.6, size: 18, tier: 1, zone: 4 },
+  // Zone 5 - Volcanic Depths (tier 3)
+  { name: 'Lava Titan',     color: '#c04010', hp: 600, atk: 45, def: 30, xp: 500, gold: [60,150], speed: 1.0, size: 36, tier: 3, zone: 5 },
+  { name: 'Fire Drake',     color: '#e06010', hp: 350, atk: 40, def: 20, xp: 380, gold: [40,100], speed: 2.4, size: 28, tier: 3, zone: 5 },
+];
+
+// ===== NPC TYPES =====
+const NPC_TYPES = [
+  { name: 'Elder Garan',    color: '#c8a060', dialogue: 'wanderer', quest: 0,  isShop: false },
+  { name: 'Blacksmith Dorn',color: '#c04010', dialogue: 'smith',    quest: 1,  isShop: true, shopType: 'weapon', shopTitle: '⚒ BLACKSMITH DORN' },
+  { name: 'Mage Selene',    color: '#6060c0', dialogue: 'mage',     quest: 2,  isShop: false },
+  { name: 'Armorer Vex',    color: '#507090', dialogue: 'armorer',  quest: -1, isShop: true, shopType: 'armor',  shopTitle: '🛡 ARMORER VEX' },
+  { name: 'Fisher Nara',    color: '#2080a0', dialogue: 'fisher',   quest: -1, isShop: true, shopType: 'fish',   shopTitle: '🎣 FISHER NARA' },
+];
+
+// ===== SHOP STOCK =====
+// buy price = base, sell price = floor(base * 0.4)
+const SHOP_STOCK = {
+  weapon: [
+    {id:'shortSword', price:60},  {id:'woodStaff',  price:45},  {id:'huntingBow', price:75},
+    {id:'longSword',  price:150}, {id:'battleAxe',  price:180}, {id:'ironMace',   price:130},
+    {id:'warblade',   price:380}, {id:'crystalWand',price:350}, {id:'runicBlade', price:500},
+    {id:'greatsword', price:900}, {id:'voidReaper', price:1500},{id:'dragonFang', price:1400},
+    {id:'healthPotion',price:40}, {id:'mpPotion',    price:35},  {id:'greatPotion',price:110},{id:'elixir',price:300},
+  ],
+  armor: [
+    {id:'ironHelm',    price:50},  {id:'leatherChest',price:80},  {id:'chainLegs',   price:70},
+    {id:'ironBoots',   price:45},  {id:'woodShield',  price:60},
+    {id:'steelHelm',   price:130}, {id:'chainMail',   price:200}, {id:'steelLegs',   price:180},
+    {id:'swiftBoots',  price:160}, {id:'ironShield',  price:220},
+    {id:'plateMail',   price:480}, {id:'towerShield', price:520}, {id:'knightHelm',  price:400},{id:'runicLegs',price:420},
+    {id:'dragonMail',  price:1200},{id:'shadowHelm',  price:950}, {id:'voidBoots',   price:800},{id:'titanLegs',price:1100},
+    {id:'healthPotion',price:40},  {id:'mpPotion',    price:35},  {id:'greatPotion', price:110},{id:'elixir',price:300},
+  ],
+  fish: [
+    {id:'commonFish',  price:8},   {id:'silverFish',  price:20},  {id:'goldenFish',  price:80},
+    {id:'enchantedFish',price:120},{id:'antidote',    price:30},
+  ],
+};
+
+// ===== QUEST DEFS =====
+const QUEST_DEFS = [
+  { id: 0, name: 'First Blood', desc: 'Kill 3 Goblin Scouts', target: 'Goblin Scout', count: 3, current: 0, reward: { xp: 100, gold: 20, item: 'ironHelm' }, done: false },
+  { id: 1, name: 'Iron Will', desc: 'Collect 5 iron pieces', target: 'iron', count: 5, current: 0, reward: { xp: 200, gold: 50, item: 'longSword' }, done: false },
+  { id: 2, name: 'Ancient Secrets', desc: 'Reach Crystal Caves', target: 'zone', count: 1, current: 0, reward: { xp: 300, gold: 80, item: 'greatsword' }, done: false },
+];
+
+// ===== SPAWN ENEMIES =====
+function spawnEnemies(zoneIdx) {
+  const map = state.zones[zoneIdx];
+  const enemies = [];
+  const types = ENEMY_TYPES.map((t,i)=>i).filter(i=>ENEMY_TYPES[i].zone===zoneIdx);
+  const count = 10 + zoneIdx * 3;
+  
+  for (let i = 0; i < count; i++) {
+    const t = ENEMY_TYPES[types[Math.floor(Math.random() * types.length)]];
+    let ex, ey;
+    do {
+      ex = (2 + Math.floor(Math.random() * (map.W-4))) * map.TILE;
+      ey = (2 + Math.floor(Math.random() * (map.H-4))) * map.TILE;
+    } while (Math.hypot(ex - state.player.x, ey - state.player.y) < 200);
+    
+    enemies.push({
+      type: 'enemy', ...t,
+      maxHp: t.hp, hp: t.hp,
+      x: ex, y: ey,
+      vx: 0, vy: 0,
+      animFrame: 0, animTimer: 0,
+      attackTimer: 0,
+      stunTimer: 0,
+      alert: false,
+      id: Math.random()
+    });
+  }
+  return enemies;
+}
+
+// ===== SPAWN NPCs =====
+function spawnNPCs(zoneIdx) {
+  const map = state.zones[zoneIdx];
+  const npcs = [];
+  const cx = Math.floor(map.W/2) * map.TILE;
+  const cy = Math.floor(map.H/2) * map.TILE;
+
+  // Zone 0: all 4 NPCs. Other zones: only shopkeepers
+  const positions = [
+    { x: cx - 130, y: cy - 80 }, // Elder Garan
+    { x: cx - 60,  y: cy - 80 }, // Blacksmith Dorn
+    { x: cx + 10,  y: cy - 80 }, // Mage Selene
+    { x: cx + 80,  y: cy - 80 }, // Armorer Vex
+    { x: cx + 150, y: cy - 80 }, // Fisher Nara
+  ];
+
+  NPC_TYPES.forEach((t, i) => {
+    if (zoneIdx !== 0 && !t.isShop) return;
+    npcs.push({
+      type: 'npc', ...t,
+      x: positions[i].x,
+      y: positions[i].y,
+      animFrame: 0, animTimer: 0
+    });
+  });
+
+  return npcs;
+}
+
+// Initialize entities
+state.entities = [...spawnEnemies(0), ...spawnNPCs(0)];
+
+// Starting equipment is only applied for NEW players (no save found)
+// It will be skipped if applyWalletSave() runs after login
+function applyStartingEquipment() {
+  state.player.equipment.weapon = ITEMS.longSword;
+  state.player.equipment.offhand = ITEMS.woodShield;
+  state.player.bag = [
+    {...ITEMS.healthPotion},
+    {...ITEMS.mpPotion},
+    {...ITEMS.ironHelm}
+  ];
+}
+applyStartingEquipment(); // default — overridden by applyWalletSave if save exists
+
+// Set camera
+state.camera.x = state.player.x - canvas.width/2;
+state.camera.y = state.player.y - canvas.height/2;
+
+// ===== DRAW FUNCTIONS =====
+
+// Pixel helper — draw a scaled pixel
+function px(x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, w, h);
+}
+
+function drawShadow(cx, cy, rx, ry) {
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPixelHero(cx, cy, facing, frame, equipment) {
+  const walk = Math.sin(frame * 0.55);
+  const legSwing = walk * 4;
+  const armSwing = -walk * 3;
+  const bob = Math.abs(walk) * -1.5;
+
+  const skinColor  = '#e8b87a';
+  const skinDark   = '#c8904a';
+  const chestCol   = equipment.chest  ? equipment.chest.color  : '#4a6080';
+  const chestDark  = equipment.chest  ? shadeColor(equipment.chest.color, -40) : '#2a4060';
+  const legCol     = equipment.legs   ? equipment.legs.color   : '#304060';
+  const legDark    = equipment.legs   ? shadeColor(equipment.legs.color, -40)  : '#182030';
+  const bootCol    = equipment.boots  ? equipment.boots.color  : '#3a2810';
+  const bootDark   = equipment.boots  ? shadeColor(equipment.boots.color, -40) : '#1a1208';
+  const helmCol    = equipment.head   ? equipment.head.color   : null;
+  const weapCol    = equipment.weapon ? equipment.weapon.color : null;
+  const shieldCol  = equipment.offhand ? equipment.offhand.color : null;
+
+  const facingRight = (facing === 'right' || facing === 'down');
+  const cy2 = cy + bob;
+
+  drawShadow(cx, cy + 18, 11, 4);
+
+  // === BACK ARM (behind body) ===
+  const backArmY = cy2 - 10 + (facingRight ? armSwing : -armSwing);
+  px(cx + (facingRight ? -11 : 7), backArmY, 4, 12, chestDark);
+
+  // === LEGS ===
+  const lLegY = cy2 + 4 + (facingRight ? legSwing : -legSwing);
+  const rLegY = cy2 + 4 + (facingRight ? -legSwing : legSwing);
+  // left leg
+  px(cx - 7, lLegY, 6, 9, legCol);
+  px(cx - 7, lLegY, 2, 9, legDark); // shading stripe
+  px(cx - 8, lLegY + 8, 7, 5, bootCol);
+  px(cx - 8, lLegY + 8, 2, 5, bootDark);
+  // right leg
+  px(cx + 1, rLegY, 6, 9, legCol);
+  px(cx + 5, rLegY, 2, 9, legDark);
+  px(cx + 0, rLegY + 8, 7, 5, bootCol);
+  px(cx + 5, rLegY + 8, 2, 5, bootDark);
+
+  // === SHIELD (left side if facingRight) ===
+  if (shieldCol) {
+    const shX = facingRight ? cx - 14 : cx + 10;
+    const shY = cy2 - 10;
+    px(shX, shY, 5, 14, shieldCol);
+    px(shX, shY, 2, 14, shadeColor(shieldCol, 30));
+    px(shX + 1, shY + 5, 3, 4, shadeColor(shieldCol, -30));
+  }
+
+  // === BODY / CHEST ===
+  px(cx - 9, cy2 - 12, 18, 16, chestCol);
+  // highlight left
+  px(cx - 9, cy2 - 12, 3, 16, shadeColor(chestCol, 30));
+  // shadow right
+  px(cx + 6, cy2 - 12, 3, 16, chestDark);
+  // belt
+  px(cx - 9, cy2 + 2, 18, 3, shadeColor(chestCol, -60));
+
+  // === FRONT ARM ===
+  const frontArmY = cy2 - 10 + (facingRight ? -armSwing : armSwing);
+  px(cx + (facingRight ? 7 : -11), frontArmY, 4, 12, chestCol);
+  px(cx + (facingRight ? 9 : -11), frontArmY, 2, 12, chestDark);
+  // hand
+  px(cx + (facingRight ? 7 : -11), frontArmY + 10, 5, 5, skinColor);
+
+  // === WEAPON ===
+  if (weapCol) {
+    const wSide = facingRight ? 1 : -1;
+    const wArmY = cy2 - 10 + (facingRight ? -armSwing : armSwing);
+    // Blade
+    px(cx + wSide * 11, wArmY - 18, 3, 28, weapCol);
+    px(cx + wSide * 11, wArmY - 18, 1, 28, shadeColor(weapCol, 60)); // shine
+    // Crossguard
+    px(cx + wSide * 8,  wArmY - 6,  9, 3, shadeColor(weapCol, -20));
+    // Pommel
+    px(cx + wSide * 11, wArmY + 10, 4, 4, shadeColor(weapCol, -40));
+  }
+
+  // === HEAD ===
+  const headY = cy2 - 28;
+  if (helmCol) {
+    // Helm base
+    px(cx - 8, headY + 2, 16, 14, helmCol);
+    px(cx - 8, headY + 2, 3, 14, shadeColor(helmCol, 40));   // highlight
+    px(cx + 5, headY + 2, 3, 14, shadeColor(helmCol, -50));  // shadow
+    // Helm top
+    px(cx - 7, headY,     14, 5,  shadeColor(helmCol, -20));
+    // Visor slit
+    if (facing !== 'up') {
+      px(cx - 5, headY + 8, 10, 3, shadeColor(helmCol, -80));
+      px(cx - 3, headY + 9, 3, 1, '#ff4400'); // eye glow
+      px(cx + 2, headY + 9, 3, 1, '#ff4400');
+    }
+  } else {
+    // Bare head
+    px(cx - 7, headY + 2, 14, 14, skinColor);
+    px(cx - 7, headY + 2, 3, 14, shadeColor(skinColor, 20));
+    px(cx + 4, headY + 2, 3, 14, skinDark);
+    // Hair
+    px(cx - 7, headY,     14, 6,  '#5a3010');
+    px(cx - 7, headY,     3,  6,  '#7a4020');
+    // Eyes (if not facing up)
+    if (facing !== 'up') {
+      const ex = facing === 'left' ? cx - 1 : cx - 3;
+      px(ex,     headY + 8, 3, 3, '#1a1a1a');
+      px(ex + 6, headY + 8, 3, 3, '#1a1a1a');
+      px(ex + 1, headY + 8, 1, 1, '#ffffff');
+      px(ex + 7, headY + 8, 1, 1, '#ffffff');
+    }
+    // Ear
+    px(facing === 'right' ? cx - 7 : cx + 6, headY + 8, 2, 4, skinDark);
+  }
+
+  // Neck
+  px(cx - 3, cy2 - 14, 6, 4, skinColor);
+}
+
+function shadeColor(hex, amt) {
+  if (!hex || hex.length < 4) return hex;
+  let r = parseInt(hex.slice(1,3),16);
+  let g = parseInt(hex.slice(3,5),16);
+  let b = parseInt(hex.slice(5,7),16);
+  r = Math.max(0, Math.min(255, r + amt));
+  g = Math.max(0, Math.min(255, g + amt));
+  b = Math.max(0, Math.min(255, b + amt));
+  return '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+}
+
+function drawPixelEnemy(cx, cy, enemy, frame) {
+  const bob = Math.sin(frame * 0.35) * 2.5;
+  const walk = Math.sin(frame * 0.5) * 3;
+  const s = enemy.size;
+  const t = enemy.tier || 0;
+  const n = enemy.name;
+
+  drawShadow(cx, cy + s/2 + 2, s/2 + 2, 5);
+
+  // Tier glow aura
+  if (t >= 2) {
+    ctx.shadowBlur = 14 + Math.sin(Date.now()/400)*4;
+    ctx.shadowColor = t===3 ? '#ff4010' : t===2 ? '#8040ff' : '#40ff80';
+  }
+
+  if (n === 'Goblin Scout') {
+    // Spindly green goblin with big eyes
+    ctx.fillStyle='#3a6a20'; ctx.fillRect(cx-4,cy-s/2+bob,8,10); // body
+    ctx.fillStyle='#4a8a30'; ctx.fillRect(cx-5,cy-s/2-6+bob,10,8); // head
+    ctx.fillStyle='#ffee88'; ctx.fillRect(cx-3,cy-s/2-4+bob,3,3); ctx.fillRect(cx+1,cy-s/2-4+bob,3,3); // eyes
+    ctx.fillStyle='#cc1100'; ctx.fillRect(cx-2,cy-s/2-1+bob,5,1); // mouth
+    ctx.fillStyle='#2a5010'; // legs
+    ctx.fillRect(cx-4,cy-s/2+10+walk,3,6); ctx.fillRect(cx+1,cy-s/2+10-walk,3,6);
+    ctx.fillStyle='#8b6040'; ctx.fillRect(cx-7,cy-s/2+1+bob,3,6); ctx.fillRect(cx+4,cy-s/2+1+bob,3,6); // arms
+    ctx.fillStyle='#c0a000'; ctx.fillRect(cx-1,cy-s/2+bob-10,3,6); // ear spike
+  } else if (n === 'Forest Imp') {
+    // Tiny orange imp with wings
+    ctx.fillStyle='#8a4010'; ctx.fillRect(cx-3,cy-s/2+bob,6,8); // body
+    ctx.fillStyle='#aa5020'; ctx.fillRect(cx-4,cy-s/2-5+bob,8,7); // head
+    ctx.fillStyle='#ffcc00'; ctx.fillRect(cx-2,cy-s/2-3+bob,2,2); ctx.fillRect(cx+1,cy-s/2-3+bob,2,2); // eyes
+    ctx.fillStyle='rgba(200,80,20,0.4)'; // wings
+    ctx.fillRect(cx-10,cy-s/2-2+bob,7,10); ctx.fillRect(cx+3,cy-s/2-2+bob,7,10);
+    ctx.fillStyle='#ff6030';
+    ctx.fillRect(cx-9,cy-s/2-1+bob,5,7); ctx.fillRect(cx+4,cy-s/2-1+bob,5,7);
+    ctx.fillStyle='#8a4010'; // legs
+    ctx.fillRect(cx-3,cy-s/2+8+walk,2,5); ctx.fillRect(cx+1,cy-s/2+8-walk,2,5);
+    // Horn
+    ctx.fillStyle='#cc3010'; ctx.fillRect(cx-1,cy-s/2-10+bob,2,6);
+  } else if (n === 'Vine Creeper') {
+    // Plant monster - green tendrils
+    ctx.fillStyle='#1a5010'; ctx.fillRect(cx-6,cy-s/2+bob,12,14); // body
+    ctx.fillStyle='#256820'; ctx.fillRect(cx-5,cy-s/2-1+bob,10,12);
+    ctx.fillStyle='#10aa30'; // glowing eye
+    ctx.fillRect(cx-1,cy-s/2+2+bob,3,3);
+    ctx.shadowBlur=6; ctx.shadowColor='#10ff40'; ctx.fillRect(cx-1,cy-s/2+2+bob,3,3); ctx.shadowBlur=0;
+    // Vines
+    ctx.fillStyle='#206010';
+    ctx.fillRect(cx-10,cy-s/2+4+walk,8,2); ctx.fillRect(cx+3,cy-s/2+6-walk,8,2);
+    ctx.fillRect(cx-2,cy-s/2+14,2,8); ctx.fillRect(cx+1,cy-s/2+14,2,8);
+    // Leaves
+    ctx.fillStyle='#30a020';
+    ctx.fillRect(cx-12,cy-s/2+2+walk,4,4); ctx.fillRect(cx+9,cy-s/2+4-walk,4,4);
+  } else if (n === 'Dark Orc') {
+    // Bulky purple orc
+    ctx.fillStyle='#3a2050'; ctx.fillRect(cx-7,cy-s/2+bob,14,14); // torso
+    ctx.fillStyle='#5a3880'; ctx.fillRect(cx-8,cy-s/2-1+bob,16,12); // chest armor
+    ctx.fillStyle='#4a2868'; ctx.fillRect(cx-6,cy-s/2-8+bob,12,10); // head
+    ctx.fillStyle='#ff3300'; ctx.fillRect(cx-4,cy-s/2-5+bob,3,3); ctx.fillRect(cx+1,cy-s/2-5+bob,3,3); // red eyes
+    ctx.fillStyle='#c0c0c0'; ctx.fillRect(cx-2,cy-s/2-1+bob,2,3); ctx.fillRect(cx+1,cy-s/2-1+bob,2,3); // tusks
+    ctx.fillStyle='#808080'; // axe
+    ctx.fillRect(cx+6,cy-s/2+bob,4,10);
+    ctx.fillRect(cx+8,cy-s/2-3+bob,5,7);
+    ctx.fillStyle='#3a2050'; // legs
+    ctx.fillRect(cx-6,cy-s/2+14+walk,5,8); ctx.fillRect(cx+1,cy-s/2+14-walk,5,8);
+  } else if (n === 'Wild Wolf') {
+    // Fast brown wolf
+    const wob = Math.sin(frame*0.6)*3;
+    ctx.fillStyle='#604020'; ctx.fillRect(cx-8,cy-s/2+wob,16,10); // body
+    ctx.fillStyle='#8a5830'; ctx.fillRect(cx-6,cy-s/2-1+wob,12,9);
+    ctx.fillStyle='#604020'; ctx.fillRect(cx+6,cy-s/2-4+wob,8,7); // head
+    ctx.fillStyle='#ffee00'; ctx.fillRect(cx+8,cy-s/2-2+wob,2,2); ctx.fillRect(cx+11,cy-s/2-2+wob,2,2); // eyes
+    ctx.fillStyle='#ff3030'; ctx.fillRect(cx+9,cy-s/2+1+wob,4,1); // mouth
+    ctx.fillStyle='#604020'; ctx.fillRect(cx+12,cy-s/2-5+wob,2,4); ctx.fillRect(cx+14,cy-s/2-6+wob,2,3); // ears
+    // 4 running legs
+    ctx.fillStyle='#503018';
+    ctx.fillRect(cx-6,cy-s/2+8+walk,3,6); ctx.fillRect(cx-1,cy-s/2+8-walk,3,6);
+    ctx.fillRect(cx+3,cy-s/2+8+walk,3,6); ctx.fillRect(cx+6,cy-s/2+8-walk,3,6);
+    ctx.fillStyle='#806040'; ctx.fillRect(cx-10,cy-s/2-2+wob,3,6); // tail
+  } else if (n === 'Forest Troll') {
+    // Big mossy troll
+    ctx.fillStyle='#1e4018'; ctx.fillRect(cx-10,cy-s/2+bob,20,18); // body
+    ctx.fillStyle='#285820'; ctx.fillRect(cx-12,cy-s/2-2+bob,24,14); // shoulders
+    ctx.fillStyle='#204818'; ctx.fillRect(cx-9,cy-s/2-12+bob,18,14); // head
+    ctx.fillStyle='#ffaa00'; ctx.fillRect(cx-5,cy-s/2-8+bob,4,4); ctx.fillRect(cx+1,cy-s/2-8+bob,4,4); // eyes
+    ctx.shadowBlur=6; ctx.shadowColor='#ffaa00'; ctx.fillRect(cx-5,cy-s/2-8+bob,4,4); ctx.fillRect(cx+1,cy-s/2-8+bob,4,4); ctx.shadowBlur=0;
+    ctx.fillStyle='#10300a'; ctx.fillRect(cx-3,cy-s/2-4+bob,7,2); // brow
+    ctx.fillStyle='#40a030'; // moss patches
+    ctx.fillRect(cx-8,cy-s/2+2+bob,4,4); ctx.fillRect(cx+4,cy-s/2+4+bob,4,4); ctx.fillRect(cx-2,cy-s/2-10+bob,4,3);
+    ctx.fillStyle='#1e4018'; // club arm
+    ctx.fillRect(cx-14,cy-s/2+bob,4,12);
+    ctx.fillStyle='#4a3020'; ctx.fillRect(cx-17,cy-s/2-4+bob,5,6); // club
+    ctx.fillStyle='#285820'; // legs
+    ctx.fillRect(cx-8,cy-s/2+18+walk,6,10); ctx.fillRect(cx+2,cy-s/2+18-walk,6,10);
+  } else if (n === 'Swamp Witch') {
+    // Purple robed witch with hat
+    ctx.fillStyle='#401060'; ctx.fillRect(cx-5,cy-s/2+bob,10,16); // robe
+    ctx.fillStyle='#602080'; ctx.fillRect(cx-4,cy-s/2+1+bob,8,14);
+    ctx.fillStyle='#c8a060'; ctx.fillRect(cx-5,cy-s/2-6+bob,10,8); // head
+    ctx.fillStyle='#1a0830'; // hat
+    ctx.fillRect(cx-7,cy-s/2-9+bob,14,4);
+    ctx.fillRect(cx-3,cy-s/2-18+bob,6,10);
+    ctx.fillStyle='#80ff40'; // glowing eyes
+    ctx.fillRect(cx-3,cy-s/2-3+bob,2,2); ctx.fillRect(cx+1,cy-s/2-3+bob,2,2);
+    ctx.shadowBlur=8; ctx.shadowColor='#80ff40'; ctx.fillRect(cx-3,cy-s/2-3+bob,2,2); ctx.fillRect(cx+1,cy-s/2-3+bob,2,2); ctx.shadowBlur=0;
+    ctx.fillStyle='#604080'; // staff arm
+    ctx.fillRect(cx+6,cy-s/2-10+bob,2,24);
+    ctx.fillStyle='#ff80ff'; ctx.fillRect(cx+5,cy-s/2-14+bob,4,4);
+    ctx.shadowBlur=8; ctx.shadowColor='#ff80ff'; ctx.fillRect(cx+5,cy-s/2-14+bob,4,4); ctx.shadowBlur=0;
+  } else if (n === 'Stone Gargoyle') {
+    // Grey winged gargoyle
+    ctx.fillStyle='#606060'; ctx.fillRect(cx-9,cy-s/2+bob,18,16); // body
+    ctx.fillStyle='#808080'; ctx.fillRect(cx-10,cy-s/2+2+bob,20,10);
+    ctx.fillStyle='#707070'; ctx.fillRect(cx-8,cy-s/2-10+bob,16,12); // head
+    ctx.fillStyle='#ff3000'; ctx.fillRect(cx-5,cy-s/2-7+bob,4,3); ctx.fillRect(cx+1,cy-s/2-7+bob,4,3); // eyes
+    ctx.shadowBlur=8; ctx.shadowColor='#ff3000'; ctx.fillRect(cx-5,cy-s/2-7+bob,4,3); ctx.fillRect(cx+1,cy-s/2-7+bob,4,3); ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(80,80,80,0.5)'; // wings
+    ctx.fillRect(cx-20,cy-s/2+bob,10,18); ctx.fillRect(cx+10,cy-s/2+bob,10,18);
+    ctx.fillStyle='#909090';
+    ctx.fillRect(cx-18,cy-s/2+2+bob,8,14); ctx.fillRect(cx+10,cy-s/2+2+bob,8,14);
+    ctx.fillStyle='#606060'; // legs
+    ctx.fillRect(cx-7,cy-s/2+16+walk,5,8); ctx.fillRect(cx+2,cy-s/2+16-walk,5,8);
+    ctx.fillStyle='#888888'; // horns
+    ctx.fillRect(cx-4,cy-s/2-13+bob,2,4); ctx.fillRect(cx+2,cy-s/2-13+bob,2,4);
+  } else if (n === 'Mountain Ogre') {
+    // Massive brown ogre
+    ctx.fillStyle='#604030'; ctx.fillRect(cx-12,cy-s/2+bob,24,20); // body
+    ctx.fillStyle='#7a5040'; ctx.fillRect(cx-14,cy-s/2+bob,28,12); // shoulders
+    ctx.fillStyle='#6a4838'; ctx.fillRect(cx-10,cy-s/2-14+bob,20,16); // head
+    ctx.fillStyle='#ffcc00'; ctx.fillRect(cx-6,cy-s/2-10+bob,5,4); ctx.fillRect(cx+1,cy-s/2-10+bob,5,4);
+    ctx.shadowBlur=8; ctx.shadowColor='#ffcc00'; ctx.fillRect(cx-6,cy-s/2-10+bob,5,4); ctx.fillRect(cx+1,cy-s/2-10+bob,5,4); ctx.shadowBlur=0;
+    ctx.fillStyle='#e0e0c0'; ctx.fillRect(cx-4,cy-s/2-3+bob,3,4); ctx.fillRect(cx+1,cy-s/2-3+bob,3,4); // tusks
+    ctx.fillStyle='#4a3020'; // boulder
+    ctx.fillRect(cx-18,cy-s/2+6+bob,10,10); ctx.fillRect(cx-17,cy-s/2+4+bob,8,4);
+    ctx.fillStyle='#604030'; // legs
+    ctx.fillRect(cx-10,cy-s/2+20+walk,8,10); ctx.fillRect(cx+2,cy-s/2+20-walk,8,10);
+  } else if (n === 'Shadow Knight') {
+    // Dark armored knight
+    ctx.fillStyle='#1a1030'; ctx.fillRect(cx-9,cy-s/2+bob,18,16); // armor
+    ctx.fillStyle='#2a2040'; ctx.fillRect(cx-10,cy-s/2+2+bob,20,10);
+    ctx.fillStyle='#1a1030'; ctx.fillRect(cx-8,cy-s/2-12+bob,16,14); // helm
+    ctx.fillStyle='#8040ff'; ctx.fillRect(cx-5,cy-s/2-8+bob,10,4); // visor glow
+    ctx.shadowBlur=12; ctx.shadowColor='#8040ff'; ctx.fillRect(cx-5,cy-s/2-8+bob,10,4); ctx.shadowBlur=0;
+    ctx.fillStyle='#2a2040'; // cape
+    ctx.fillRect(cx-12,cy-s/2+4+bob,4,14); ctx.fillRect(cx+8,cy-s/2+4+bob,4,14);
+    ctx.fillStyle='#c0c0ff'; // sword
+    ctx.fillRect(cx+10,cy-s/2-8+bob,3,24);
+    ctx.fillStyle='#8040ff'; ctx.fillRect(cx+9,cy-s/2-10+bob,5,4); // crossguard
+    ctx.fillStyle='#1a1030'; // legs
+    ctx.fillRect(cx-8,cy-s/2+16+walk,6,8); ctx.fillRect(cx+2,cy-s/2+16-walk,6,8);
+  } else if (n === 'Crystal Golem') {
+    // Translucent blue crystal golem
+    const pulse = Math.sin(Date.now()/300)*0.3+0.7;
+    ctx.shadowBlur=16; ctx.shadowColor=`rgba(80,150,255,${pulse})`;
+    ctx.fillStyle=`rgba(60,100,200,0.8)`; ctx.fillRect(cx-11,cy-s/2+bob,22,20);
+    ctx.fillStyle=`rgba(100,160,255,0.7)`; ctx.fillRect(cx-12,cy-s/2+2+bob,24,12);
+    ctx.fillStyle=`rgba(80,120,220,0.9)`; ctx.fillRect(cx-10,cy-s/2-14+bob,20,16);
+    ctx.fillStyle=`rgba(180,220,255,${pulse})`;
+    ctx.fillRect(cx-6,cy-s/2-10+bob,5,4); ctx.fillRect(cx+1,cy-s/2-10+bob,5,4);
+    ctx.fillStyle='rgba(200,230,255,0.9)'; // crystal shards
+    ctx.fillRect(cx-13,cy-s/2-4+bob,3,10); ctx.fillRect(cx+10,cy-s/2-4+bob,3,10);
+    ctx.fillRect(cx-4,cy-s/2-18+bob,2,6); ctx.fillRect(cx+2,cy-s/2-18+bob,2,6);
+    ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(100,160,255,0.8)'; // legs
+    ctx.fillRect(cx-9,cy-s/2+20+walk,7,10); ctx.fillRect(cx+2,cy-s/2+20-walk,7,10);
+  } else if (n === 'Ancient Golem') {
+    // Massive stone golem
+    ctx.fillStyle='#405060'; ctx.fillRect(cx-14,cy-s/2+bob,28,22);
+    ctx.fillStyle='#506070'; ctx.fillRect(cx-16,cy-s/2+4+bob,32,12);
+    ctx.fillStyle='#405060'; ctx.fillRect(cx-12,cy-s/2-16+bob,24,18);
+    ctx.fillStyle='#00ffff';
+    ctx.shadowBlur=14; ctx.shadowColor='#00ffff';
+    ctx.fillRect(cx-7,cy-s/2-10+bob,6,5); ctx.fillRect(cx+1,cy-s/2-10+bob,6,5);
+    ctx.shadowBlur=0;
+    ctx.fillStyle='#60a0c0';
+    ctx.fillRect(cx-7,cy-s/2-4+bob,14,2); // mouth line
+    ctx.fillStyle='#304050'; // massive fists
+    ctx.fillRect(cx-20,cy-s/2+8+walk,8,10); ctx.fillRect(cx+12,cy-s/2+8-walk,8,10);
+    ctx.fillStyle='#506070'; // rune markings
+    ctx.fillStyle='rgba(0,255,255,0.2)';
+    ctx.fillRect(cx-6,cy-s/2+4+bob,12,6);
+    ctx.fillStyle='#405060'; // legs
+    ctx.fillRect(cx-12,cy-s/2+22+walk,9,12); ctx.fillRect(cx+3,cy-s/2+22-walk,9,12);
+  } else if (n === 'Bog Serpent') {
+    // Serpentine body
+    const slither = Math.sin(frame*0.4)*8;
+    ctx.fillStyle='#1a5030'; 
+    for (let i=0;i<5;i++) {
+      const sx=slither*Math.sin(i*0.8);
+      ctx.fillRect(cx-6+sx,cy-s/2+i*6+bob,12,7);
+    }
+    ctx.fillStyle='#30a060'; ctx.fillRect(cx-5+slither,cy-s/2+bob,10,6);
+    ctx.fillStyle='#ffdd00'; ctx.fillRect(cx-3+slither,cy-s/2+2+bob,2,2); ctx.fillRect(cx+1+slither,cy-s/2+2+bob,2,2);
+    ctx.fillStyle='#ff2020'; ctx.fillRect(cx-1+slither,cy-s/2+5+bob,2,1); // tongue
+    ctx.fillStyle='#205840'; // fangs
+    ctx.fillRect(cx-2+slither,cy-s/2+4+bob,1,2); ctx.fillRect(cx+1+slither,cy-s/2+4+bob,1,2);
+  } else if (n === 'Plague Zombie') {
+    // Rotting undead
+    ctx.fillStyle='#3a4a20'; ctx.fillRect(cx-7,cy-s/2+bob+2,14,16); // body (hunched)
+    ctx.fillStyle='#4a5a28'; ctx.fillRect(cx-6,cy-s/2+3+bob,12,12);
+    ctx.fillStyle='#6a7040'; ctx.fillRect(cx-6,cy-s/2-7+bob,12,10); // head
+    ctx.fillStyle='#dddd00'; ctx.fillRect(cx-4,cy-s/2-4+bob,3,3); ctx.fillRect(cx+1,cy-s/2-4+bob,3,3);
+    ctx.shadowBlur=6; ctx.shadowColor='#dddd00'; ctx.fillRect(cx-4,cy-s/2-4+bob,3,3); ctx.fillRect(cx+1,cy-s/2-4+bob,3,3); ctx.shadowBlur=0;
+    ctx.fillStyle='#804020'; ctx.fillRect(cx-2,cy-s/2-1+bob,5,1); // grin
+    ctx.fillStyle='#3a4a20'; // outstretched arms
+    ctx.fillRect(cx-14,cy-s/2+2+walk,8,4); ctx.fillRect(cx+6,cy-s/2+4-walk,8,4);
+    ctx.fillStyle='#60aa30'; // toxic drip
+    if (Math.sin(frame*0.3)>0.5) ctx.fillRect(cx-2,cy-s/2-1+bob,2,4);
+    ctx.fillStyle='#3a4a20'; // shambling legs
+    ctx.fillRect(cx-5,cy-s/2+18+walk*0.5,4,8); ctx.fillRect(cx+1,cy-s/2+18-walk*0.5,4,8);
+  } else if (n === 'Lava Titan') {
+    // Massive fire giant
+    ctx.shadowBlur=20; ctx.shadowColor='#ff4000';
+    ctx.fillStyle='#601000'; ctx.fillRect(cx-16,cy-s/2+bob,32,24);
+    ctx.fillStyle='#902010'; ctx.fillRect(cx-18,cy-s/2+4+bob,36,14);
+    ctx.fillStyle='#ff6020'; ctx.fillRect(cx-14,cy-s/2-18+bob,28,20);
+    ctx.fillStyle='#ffcc00'; ctx.fillRect(cx-8,cy-s/2-12+bob,7,6); ctx.fillRect(cx+1,cy-s/2-12+bob,7,6); // eyes
+    ctx.fillStyle='#ff8000'; // lava cracks on body
+    ctx.fillRect(cx-8,cy-s/2+4+bob,2,14); ctx.fillRect(cx+6,cy-s/2+6+bob,2,12);
+    ctx.fillRect(cx-4,cy-s/2+10+bob,8,2);
+    ctx.fillStyle='#ff4000'; // fists
+    ctx.fillRect(cx-24,cy-s/2+10+walk,10,12); ctx.fillRect(cx+14,cy-s/2+10-walk,10,12);
+    ctx.fillStyle='#601000'; // legs
+    ctx.fillRect(cx-14,cy-s/2+24+walk,10,14); ctx.fillRect(cx+4,cy-s/2+24-walk,10,14);
+    // Fire crown
+    for(let i=0;i<5;i++){
+      ctx.fillStyle=`hsl(${30+i*12},100%,${50+Math.sin(Date.now()/200+i)*20}%)`;
+      ctx.fillRect(cx-12+i*6,cy-s/2-22+bob+Math.floor(Math.sin(Date.now()/150+i)*3),3,8+Math.floor(Math.sin(Date.now()/200+i)*4));
+    }
+    ctx.shadowBlur=0;
+  } else if (n === 'Fire Drake') {
+    // Dragon-like fire creature
+    ctx.shadowBlur=16; ctx.shadowColor='#ff6000';
+    ctx.fillStyle='#802010'; ctx.fillRect(cx-10,cy-s/2+bob,20,16);
+    ctx.fillStyle='#c04020'; ctx.fillRect(cx-12,cy-s/2+2+bob,24,10);
+    ctx.fillStyle='#a03010'; ctx.fillRect(cx-9,cy-s/2-12+bob,18,14); // head
+    ctx.fillStyle='#ffff00'; ctx.fillRect(cx-5,cy-s/2-8+bob,4,4); ctx.fillRect(cx+1,cy-s/2-8+bob,4,4); // eyes
+    ctx.shadowBlur=10; ctx.shadowColor='#ffff00'; ctx.fillRect(cx-5,cy-s/2-8+bob,4,4); ctx.fillRect(cx+1,cy-s/2-8+bob,4,4); ctx.shadowBlur=0;
+    // Wings
+    ctx.fillStyle='rgba(180,40,0,0.7)';
+    ctx.fillRect(cx-22,cy-s/2+bob,12,16); ctx.fillRect(cx+10,cy-s/2+bob,12,16);
+    ctx.fillStyle='rgba(255,100,0,0.4)';
+    ctx.fillRect(cx-20,cy-s/2+2+bob,10,12); ctx.fillRect(cx+10,cy-s/2+2+bob,10,12);
+    // Tail
+    ctx.fillStyle='#802010';
+    ctx.fillRect(cx-16,cy-s/2+12+bob,6,4); ctx.fillRect(cx-20,cy-s/2+14+bob,5,3);
+    ctx.fillStyle='#802010'; // legs
+    ctx.fillRect(cx-8,cy-s/2+16+walk,5,8); ctx.fillRect(cx+3,cy-s/2+16-walk,5,8);
+    // Fire breath flash
+    if (Math.sin(Date.now()/200)>0.7) {
+      ctx.fillStyle='rgba(255,150,0,0.6)'; ctx.fillRect(cx+8,cy-s/2-5+bob,16,6);
+    }
+  } else {
+    // Generic fallback
+    ctx.fillStyle = enemy.color || '#ff4444';
+    ctx.fillRect(cx - s/2, cy - s/2 + bob, s, s);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(cx - s/2, cy - s/2 + bob, s, s/3);
+    ctx.fillStyle = '#ffff00';
+    ctx.fillRect(cx-4, cy-s/2+4+bob, 3, 3); ctx.fillRect(cx+2, cy-s/2+4+bob, 3, 3);
+  }
+
+  ctx.shadowBlur = 0;
+
+  // HP bar above enemy (always visible)
+  const hpFrac = enemy.hp / enemy.maxHp;
+  const bw = s + 8, bx = cx - bw/2, by = cy - s/2 - 10 + bob;
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(bx-1, by-1, bw+2, 6);
+  ctx.fillStyle = hpFrac > 0.5 ? '#22cc44' : hpFrac > 0.25 ? '#ddaa00' : '#cc2222';
+  ctx.fillRect(bx, by, Math.max(0,bw * hpFrac), 4);
+  // Enemy name on hover (if targeted)
+  if (enemy.alert) {
+    ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(cx-30, by-14, 60, 10);
+    ctx.fillStyle = RARITY[enemy.tier||0]?.color || '#ffffff';
+    ctx.font = '8px monospace'; ctx.textAlign = 'center';
+    ctx.fillText(enemy.name, cx, by-6);
+    ctx.textAlign = 'left';
+  }
+}
+
+
+function drawNPC(cx, cy, npc, frame) {
+  const bob = Math.sin(frame * 0.18) * 1.5;
+  const isShop = npc.isShop;
+
+  drawShadow(cx, cy + 16, 12, 4);
+
+  // Unique looks per NPC type
+  if (npc.name === 'Elder Garan') {
+    // Old wise man with staff
+    // Robe
+    px(cx-9, cy-14+bob, 18, 30, '#8a7040');
+    px(cx-9, cy-14+bob, 4, 30, '#b09860');
+    px(cx+5, cy-14+bob, 4, 30, '#5a4820');
+    // Robe trim
+    px(cx-9, cy+14+bob, 18, 4, '#c0a060');
+    // Staff
+    px(cx+10, cy-30+bob, 3, 46, '#6a4820');
+    px(cx+9,  cy-32+bob, 5, 4,  '#d0a040');
+    ctx.save(); ctx.shadowColor='#d0c040'; ctx.shadowBlur=6;
+    px(cx+10, cy-34+bob, 3, 5, '#ffe060');
+    ctx.restore();
+    // Arms
+    px(cx-13, cy-10+bob, 5, 14, '#8a7040');
+    px(cx+8,  cy-10+bob, 5, 14, '#8a7040');
+    // Head
+    px(cx-8, cy-28+bob, 16, 16, '#d0a870');
+    px(cx-8, cy-28+bob, 3, 16, '#e0c090');
+    px(cx+5, cy-28+bob, 3, 16, '#a07840');
+    // White beard
+    px(cx-6, cy-18+bob, 12, 8, '#e8e8e8');
+    px(cx-4, cy-12+bob, 8, 6, '#e8e8e8');
+    // White hair / hood
+    px(cx-9, cy-32+bob, 18, 8, '#c8c8c8');
+    px(cx-10,cy-28+bob, 3, 6, '#c8c8c8');
+    // Eyes (wise, squinting)
+    px(cx-5, cy-24+bob, 3, 2, '#3a2010');
+    px(cx+2, cy-24+bob, 3, 2, '#3a2010');
+
+  } else if (npc.name === 'Blacksmith Dorn') {
+    // Burly blacksmith with apron
+    px(cx-10, cy-14+bob, 20, 30, '#4a3020');  // shirt
+    px(cx-10, cy-14+bob, 4, 30, '#6a5030');
+    // Leather apron
+    px(cx-8, cy-10+bob, 16, 26, '#8a5020');
+    px(cx-8, cy-10+bob, 3, 26, '#aa7030');
+    px(cx+5, cy-10+bob, 3, 26, '#5a3010');
+    // Apron straps
+    px(cx-6, cy-14+bob, 3, 8, '#8a5020');
+    px(cx+3, cy-14+bob, 3, 8, '#8a5020');
+    // Muscular arms
+    px(cx-15, cy-10+bob, 6, 16, '#c08050');
+    px(cx+9,  cy-10+bob, 6, 16, '#c08050');
+    // Hammer
+    px(cx+14, cy-12+bob, 4, 20, '#6a4820');
+    px(cx+12, cy-16+bob, 8, 8, '#909090');
+    px(cx+12, cy-16+bob, 3, 8, '#c0c0c0');
+    // Head
+    px(cx-8, cy-28+bob, 16, 16, '#c08050');
+    px(cx-8, cy-28+bob, 3, 16, '#d09860');
+    // Short dark hair
+    px(cx-8, cy-32+bob, 16, 7, '#2a1808');
+    // Stubble / beard
+    px(cx-6, cy-18+bob, 12, 5, '#3a2010');
+    // Eyes
+    px(cx-4, cy-24+bob, 3, 3, '#3a2010');
+    px(cx+1, cy-24+bob, 3, 3, '#3a2010');
+    px(cx-3, cy-23+bob, 1, 1, '#fff');
+    px(cx+2, cy-23+bob, 1, 1, '#fff');
+
+  } else if (npc.name === 'Mage Selene') {
+    // Elegant mage, blue robes
+    px(cx-8, cy-14+bob, 16, 30, '#2a2860');
+    px(cx-8, cy-14+bob, 3, 30, '#4a48a0');
+    px(cx+5, cy-14+bob, 3, 30, '#181838');
+    // Star pattern on robe
+    ctx.save(); ctx.globalAlpha=0.6;
+    px(cx-4, cy-6+bob, 2, 2, '#8080ff');
+    px(cx+2, cy+2+bob, 2, 2, '#8080ff');
+    px(cx-2, cy+8+bob, 2, 2, '#8080ff');
+    ctx.restore();
+    // Cape
+    px(cx-11, cy-12+bob, 4, 24, '#1a1848');
+    px(cx+7,  cy-12+bob, 4, 24, '#1a1848');
+    // Arms (slender)
+    px(cx-12, cy-10+bob, 5, 14, '#2a2860');
+    px(cx+7,  cy-10+bob, 5, 14, '#2a2860');
+    // Glowing orb in hand
+    ctx.save(); ctx.shadowColor='#8080ff'; ctx.shadowBlur=10;
+    px(cx-14, cy-4+bob, 6, 6, '#6060e0');
+    ctx.restore();
+    px(cx-13, cy-5+bob, 3, 3, '#a0a0ff');
+    // Head
+    px(cx-7, cy-28+bob, 14, 16, '#e0c0a0');
+    px(cx-7, cy-28+bob, 3, 16, '#f0d0b0');
+    px(cx+4, cy-28+bob, 3, 16, '#c0a080');
+    // Pointed hat
+    px(cx-8, cy-32+bob, 16, 7, '#2a2860');
+    px(cx-5, cy-38+bob, 10, 8, '#2a2860');
+    px(cx-2, cy-44+bob, 4,  8, '#2a2860');
+    // Hat star
+    ctx.save(); ctx.shadowColor='#fff080'; ctx.shadowBlur=5;
+    px(cx-1, cy-36+bob, 2, 2, '#fff080');
+    ctx.restore();
+    // Eyes (glowing slightly)
+    ctx.save(); ctx.shadowColor='#8080ff'; ctx.shadowBlur=4;
+    px(cx-4, cy-24+bob, 3, 3, '#6060c0');
+    px(cx+1, cy-24+bob, 3, 3, '#6060c0');
+    ctx.restore();
+
+  } else { // Armorer Vex
+    // Gruff armorer wearing heavy armor
+    px(cx-10, cy-14+bob, 20, 30, '#506070');  // armor body
+    px(cx-10, cy-14+bob, 4, 30, '#708090');
+    px(cx+6,  cy-14+bob, 4, 30, '#304050');
+    // Armor plates
+    px(cx-9, cy-12+bob, 18, 6, '#607080');
+    px(cx-9, cy-12+bob, 4, 6, '#80a0b0');
+    px(cx-9, cy-2+bob, 18, 4, '#607080');
+    // Shoulder plates
+    px(cx-14, cy-14+bob, 6, 8, '#708090');
+    px(cx+8,  cy-14+bob, 6, 8, '#708090');
+    // Arms (armored)
+    px(cx-15, cy-8+bob, 6, 16, '#506070');
+    px(cx+9,  cy-8+bob, 6, 16, '#506070');
+    // Gauntlets
+    px(cx-16, cy+4+bob, 7, 8, '#607080');
+    px(cx+9,  cy+4+bob, 7, 8, '#607080');
+    // Head (helmet with visor up)
+    px(cx-9, cy-30+bob, 18, 18, '#506070');
+    px(cx-9, cy-30+bob, 4, 18, '#708090');
+    px(cx+5, cy-30+bob, 4, 18, '#304050');
+    // Visor (raised)
+    px(cx-8, cy-30+bob, 16, 5, '#304050');
+    // Face (gruff)
+    px(cx-6, cy-26+bob, 12, 10, '#b07850');
+    px(cx-4, cy-22+bob, 3, 3, '#3a2010');
+    px(cx+1, cy-22+bob, 3, 3, '#3a2010');
+    // Scar
+    px(cx+0, cy-24+bob, 1, 6, '#804030');
+    // Stubble
+    px(cx-5, cy-18+bob, 10, 3, '#402010');
+  }
+
+  // Name tag above NPC
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 10px monospace';
+  ctx.shadowColor = '#000';
+  ctx.shadowBlur = 4;
+  const nameColor = isShop ? '#f0c040' : '#a0d0ff';
+  ctx.fillStyle = nameColor;
+  ctx.fillText(npc.name, cx, cy - 38 + bob);
+  if (isShop) {
+    ctx.font = '8px monospace';
+    ctx.fillStyle = '#c0a040';
+    ctx.fillText('🛒 SHOP', cx, cy - 28 + bob);
+  }
+  ctx.restore();
+
+  // Interact hint
+  const dist = Math.hypot(state.player.x - npc.x, state.player.y - npc.y);
+  if (dist < 70) {
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '9px monospace';
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = '#000'; ctx.shadowBlur = 4;
+    ctx.fillText('[CLICK]', cx, cy - 50 + bob);
+    ctx.restore();
+  }
+}
+
+function drawTile(tx, ty, tileType, map) {
+  const x = tx * map.TILE - state.camera.x;
+  const y = ty * map.TILE - state.camera.y;
+  const T = map.TILE;
+  const z = ZONE_DEFS[state.zone];
+
+  // Deterministic noise for tile variety
+  const h = (tx * 374761393 + ty * 1234567891 + state.zone * 2654435761) >>> 0;
+  const n1 = (h & 0xff) / 255;
+  const n2 = ((h >> 8) & 0xff) / 255;
+  const n3 = ((h >> 16) & 0xff) / 255;
+
+  // ---- GRASS / GROUND ----
+  if (tileType === 0) {
+    // Base grass with subtle variation
+    const gv = Math.floor(n1 * 18);
+    const gr = parseInt(z.grassColor.slice(1,3),16) + gv;
+    const gg = parseInt(z.grassColor.slice(3,5),16) + gv;
+    const gb = parseInt(z.grassColor.slice(5,7),16);
+    ctx.fillStyle = `rgb(${Math.min(gr,180)},${Math.min(gg,200)},${Math.min(gb,120)})`;
+    ctx.fillRect(x, y, T, T);
+
+    // Grass tufts / texture details (zone-specific)
+    if (state.zone === 0) { // Elven Ruins - green grass with flowers
+      if (n1 < 0.12) { // flower dot
+        ctx.fillStyle = n2 > 0.5 ? '#ffdd44' : '#ff88aa';
+        ctx.fillRect(x + Math.floor(n2*22), y + Math.floor(n3*22), 2, 2);
+      }
+      if (n2 < 0.20) { // grass tuft
+        ctx.fillStyle = '#2a5020';
+        ctx.fillRect(x+Math.floor(n1*26)+1, y+Math.floor(n3*24)+2, 1, 4);
+        ctx.fillRect(x+Math.floor(n1*26)+3, y+Math.floor(n3*24)+1, 1, 5);
+        ctx.fillStyle = '#1e3a18';
+        ctx.fillRect(x+Math.floor(n1*26)+5, y+Math.floor(n3*24)+2, 1, 3);
+      }
+      if (n3 < 0.05) { // ancient rune stone
+        ctx.fillStyle = '#405038'; ctx.fillRect(x+8,y+10,8,6);
+        ctx.fillStyle = '#304028'; ctx.fillRect(x+9,y+8,6,2);
+        ctx.fillStyle = '#60807060'; ctx.fillRect(x+10,y+11,2,3);
+      }
+    } else if (state.zone === 1) { // Dark Forest - dead leaves
+      if (n1 < 0.18) {
+        ctx.fillStyle = n2>0.5 ? '#503010' : '#604020';
+        ctx.fillRect(x+Math.floor(n2*24), y+Math.floor(n3*24), 3+Math.floor(n1*4), 2);
+      }
+      if (n2 < 0.08) { // mushroom
+        ctx.fillStyle = '#c04030'; ctx.fillRect(x+12,y+14,6,4);
+        ctx.fillStyle = '#e06050'; ctx.fillRect(x+11,y+12,8,3);
+        ctx.fillStyle = '#f09080'; ctx.fillRect(x+12,y+11,6,2);
+        ctx.fillStyle = '#d0d0c0'; ctx.fillRect(x+14,y+18,2,4);
+      }
+    } else if (state.zone === 2) { // Iron Mountains - gravel/rock ground
+      ctx.fillStyle = `rgba(80,60,50,${0.1+n1*0.15})`;
+      ctx.fillRect(x+Math.floor(n2*20), y+Math.floor(n3*20), 4+Math.floor(n1*8), 3);
+      if (n1 < 0.1) { // small pebble
+        ctx.fillStyle = '#706050'; ctx.fillRect(x+Math.floor(n2*20)+2, y+Math.floor(n3*20)+1, 3, 2);
+        ctx.fillStyle = '#908070'; ctx.fillRect(x+Math.floor(n2*20)+2, y+Math.floor(n3*20)+1, 1, 1);
+      }
+    } else if (state.zone === 3) { // Crystal Caves - glowing floor
+      ctx.fillStyle = `rgba(80,80,200,${0.08+n1*0.12})`;
+      ctx.fillRect(x, y, T, T);
+      if (n1 < 0.08) { // floor crystal
+        ctx.fillStyle = `rgba(100,150,255,${0.4+n2*0.4})`;
+        ctx.fillRect(x+Math.floor(n2*20)+4, y+Math.floor(n3*20)+4, 2+Math.floor(n1*6), 2);
+      }
+    } else if (state.zone === 4) { // Sunken Marshes - muddy ground
+      ctx.fillStyle = `rgba(30,50,20,${n1*0.3})`;
+      ctx.fillRect(x, y, T, T);
+      if (n2 < 0.15) { // mud puddle
+        ctx.fillStyle = '#203010'; ctx.fillRect(x+Math.floor(n1*16)+2, y+Math.floor(n3*16)+2, 8+Math.floor(n2*8), 5);
+      }
+      if (n1 < 0.06) { // lily pad hint
+        ctx.fillStyle = '#306020'; ctx.fillRect(x+10,y+12,8,5);
+        ctx.fillStyle = '#408030'; ctx.fillRect(x+11,y+11,6,3);
+        ctx.fillStyle = '#ff6080'; ctx.fillRect(x+13,y+10,2,2);
+      }
+    } else if (state.zone === 5) { // Volcanic - hot cracked ground
+      ctx.fillStyle = `rgba(100,20,0,${0.15+n1*0.2})`;
+      ctx.fillRect(x, y, T, T);
+      if (n1 < 0.25) { // crack lines
+        ctx.fillStyle = '#ff401080';
+        ctx.fillRect(x+Math.floor(n2*20), y+Math.floor(n3*20), 1, 6+Math.floor(n1*10));
+      }
+      if (n2 < 0.06) { // lava glow dot
+        ctx.fillStyle = '#ff8020';
+        ctx.fillRect(x+14, y+14, 3, 3);
+        ctx.shadowBlur=8; ctx.shadowColor='#ff4000';
+        ctx.fillRect(x+14, y+14, 3, 3);
+        ctx.shadowBlur=0;
+      }
+    }
+    return;
+  }
+
+  // ---- WALL / TREE ----
+  if (tileType === 1) {
+    // Shadow under tree
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(x+4, y+T-6, T-4, 8);
+
+    if (state.zone <= 1) { // Trees (forest zones)
+      const treeH = 28 + Math.floor(n1*8);
+      // Trunk
+      ctx.fillStyle = '#5a3820'; ctx.fillRect(x+T/2-3, y+treeH-2, 6, T-treeH+6);
+      ctx.fillStyle = '#7a5030'; ctx.fillRect(x+T/2-2, y+treeH-2, 2, T-treeH+4);
+      // Bark detail
+      ctx.fillStyle = '#4a2a10'; ctx.fillRect(x+T/2+1, y+treeH+2, 2, 4);
+      // Foliage layers (dark→mid→light)
+      const gc = state.zone===0 ? ['#1a4010','#286020','#40a030','#60c050'] : ['#101a08','#182810','#203818','#304a28'];
+      const cx2 = x+T/2, cy2 = y+treeH;
+      // back shadow blob
+      ctx.fillStyle = gc[0];
+      for(let dy=-10;dy<=2;dy++) for(let dx=-10;dx<=10;dx++) {
+        if (dx*dx*0.8+dy*dy < 90+n1*30) ctx.fillRect(cx2+dx-1, cy2+dy+1, 2, 2);
+      }
+      // main blob
+      ctx.fillStyle = gc[1];
+      for(let dy=-11;dy<=1;dy++) for(let dx=-9;dx<=9;dx++) {
+        if (dx*dx*0.8+dy*dy < 70+n2*20) ctx.fillRect(cx2+dx, cy2+dy, 2, 2);
+      }
+      // top highlight
+      ctx.fillStyle = gc[2];
+      for(let dy=-9;dy<=-2;dy++) for(let dx=-6;dx<=6;dx++) {
+        if (dx*dx+dy*dy < 32+n3*12) ctx.fillRect(cx2+dx, cy2+dy, 2, 2);
+      }
+      // leaf dots
+      ctx.fillStyle = gc[3];
+      for (let i=0;i<6;i++) {
+        const lx2=Math.floor(((h*(i+3))&0xff)/255*16)-8;
+        const ly2=Math.floor(((h*(i+7))&0xff)/255*12)-9;
+        ctx.fillRect(cx2+lx2, cy2+ly2, 2, 2);
+      }
+    } else if (state.zone === 2) { // Pine trees / boulders
+      if (n1 > 0.5) { // boulder
+        ctx.fillStyle='#605050'; ctx.fillRect(x+4,y+10,T-8,T-12);
+        ctx.fillStyle='#807060'; ctx.fillRect(x+5,y+8,T-12,6);
+        ctx.fillStyle='#908070'; ctx.fillRect(x+6,y+9,8,3);
+        ctx.fillStyle='rgba(0,0,0,0.3)'; ctx.fillRect(x+4,y+T-8,T-8,4);
+      } else { // pine tree
+        ctx.fillStyle='#5a3820'; ctx.fillRect(x+T/2-2,y+T-10,4,10);
+        const pc=['#1a2a10','#253818','#304a20'];
+        [[12,8],[9,5],[6,2]].forEach(([w,top],i)=>{
+          ctx.fillStyle=pc[i];
+          ctx.fillRect(x+T/2-w/2,y+top,w,8);
+          ctx.fillStyle='#406030';
+          ctx.fillRect(x+T/2-w/2+1,y+top+1,4,2);
+        });
+      }
+    } else if (state.zone === 3) { // Crystal pillars
+      ctx.fillStyle='#2a2850'; ctx.fillRect(x+T/2-6,y+4,12,T-4);
+      ctx.fillStyle='#4040a0'; ctx.fillRect(x+T/2-5,y+2,10,T-2);
+      ctx.fillStyle='#6060c0'; ctx.fillRect(x+T/2-3,y+0,6,T);
+      ctx.fillStyle='#8080ff'; ctx.fillRect(x+T/2-2,y+2,3,8);
+      // Crystal glow
+      ctx.shadowBlur=12; ctx.shadowColor=`hsl(${220+n1*60},80%,70%)`;
+      ctx.fillStyle=`hsla(${220+n1*60},80%,70%,0.4)`;
+      ctx.fillRect(x+T/2-4,y,8,T);
+      ctx.shadowBlur=0;
+      // Facets
+      ctx.fillStyle='rgba(180,180,255,0.3)'; ctx.fillRect(x+T/2-4,y+4,2,T-8);
+    } else if (state.zone === 4) { // Dead mangrove trees
+      ctx.fillStyle='#302820'; ctx.fillRect(x+T/2-2,y+8,5,T-8);
+      ctx.fillStyle='#403830'; ctx.fillRect(x+T/2-3,y+10,2,T-10); // root left
+      ctx.fillRect(x+T/2+2,y+12,2,T-12); // root right
+      ctx.fillStyle='#284018'; ctx.fillRect(x+4,y+4,T-6,16);
+      ctx.fillStyle='#1e3010'; ctx.fillRect(x+2,y+8,T-2,12);
+      ctx.fillStyle='#304820'; ctx.fillRect(x+6,y+2,T-10,10);
+    } else if (state.zone === 5) { // Volcanic rock spires
+      ctx.fillStyle='#402010'; ctx.fillRect(x+T/2-5,y+6,10,T-6);
+      ctx.fillStyle='#603020'; ctx.fillRect(x+T/2-4,y+2,8,T-4);
+      ctx.fillStyle='#804030'; ctx.fillRect(x+T/2-2,y,4,8);
+      ctx.fillStyle='#ff401020'; ctx.fillRect(x+T/2-3,y+4,6,T-4);
+      if (n1 < 0.4) { // lava crack
+        ctx.fillStyle='#ff6020'; ctx.fillRect(x+T/2-1,y+T/2,2,T/2);
+      }
+    }
+    return;
+  }
+
+  // ---- PATH ----
+  if (tileType === 2) {
+    ctx.fillStyle = z.pathColor; ctx.fillRect(x, y, T, T);
+    // Cobblestone pattern
+    const offX = (h & 3) * 4, offY = ((h>>4) & 3) * 4;
+    const stones = [[1+offX,1+offY,12,10],[14+offX,1+offY,10,10],[1+offX,12+offY,10,10],[12+offX,13+offY,12,9]];
+    stones.forEach(([sx,sy,sw,sh])=>{
+      ctx.fillStyle=`rgba(255,255,255,${0.03+n1*0.04})`; ctx.fillRect(x+sx,y+sy,sw,sh);
+      ctx.fillStyle=`rgba(0,0,0,${0.08+n2*0.05})`; ctx.fillRect(x+sx+sw,y+sy,1,sh); ctx.fillRect(x+sx,y+sy+sh,sw,1);
+    });
+    return;
+  }
+
+  // ---- DEEP WATER ----
+  if (tileType === 3) {
+    const time = Date.now()/1200;
+    const wave = Math.sin(time + tx*0.4 + ty*0.3) * 0.15;
+    const wc = z.waterColor || '#1a4060';
+    const wr = parseInt(wc.slice(1,3),16);
+    const wg = parseInt(wc.slice(3,5),16);
+    const wb = parseInt(wc.slice(5,7),16);
+    const wd = Math.floor(wave*20);
+    ctx.fillStyle=`rgb(${wr+wd},${wg+wd},${wb+wd+10})`; ctx.fillRect(x,y,T,T);
+    // Ripple lines
+    const riphase = (time*0.8 + tx*0.3)%1;
+    ctx.fillStyle=`rgba(150,200,255,${0.08+Math.sin(time+tx*0.5)*0.05})`;
+    ctx.fillRect(x+2+Math.floor(riphase*8), y+Math.floor(ty%4*8)+4, 12, 1);
+    ctx.fillRect(x+14+Math.floor(riphase*6), y+Math.floor(ty%4*8)+12, 8, 1);
+    // Foam at edges
+    if (n1 < 0.2) { ctx.fillStyle=`rgba(200,240,255,0.15)`; ctx.fillRect(x,y,T,2); }
+    // Fishing spot indicator
+    const map = state.zones[state.zone];
+    if (map.fishingSpots) {
+      const nearFish = map.fishingSpots.some(s => Math.abs(s.x/T-tx)<2 && Math.abs(s.y/T-ty)<2);
+      if (nearFish && n1 < 0.15) {
+        ctx.fillStyle='rgba(255,255,150,0.25)'; ctx.fillRect(x+4,y+4,T-8,T-8);
+      }
+    }
+    return;
+  }
+
+  // ---- MOUNTAIN ----
+  if (tileType === 4) {
+    // Base rock
+    const mc = state.zone===5 ? '#503020' : '#504040';
+    ctx.fillStyle=mc; ctx.fillRect(x,y,T,T);
+    // Mountain face facets
+    ctx.fillStyle=state.zone===5?'#704030':'#706050'; ctx.fillRect(x,y,T,T/2);
+    ctx.fillStyle=state.zone===5?'#402010':'#504030'; ctx.fillRect(x,y+T/2,T,T/2);
+    // Peak
+    ctx.fillStyle=state.zone===5?'#906040':'#908070';
+    ctx.fillRect(x+T/2-4+Math.floor(n1*4),y+2,8,8);
+    ctx.fillStyle=state.zone===5?'#c08050':'#b0a090';
+    ctx.fillRect(x+T/2-2+Math.floor(n1*4),y,4,4);
+    // Snow cap (only non-volcanic)
+    if (state.zone!==5 && n1>0.5) { ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fillRect(x+T/2-3,y,6,4); }
+    // Crack detail
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.fillRect(x+Math.floor(n2*20)+4, y+4, 1, 12+Math.floor(n3*8));
+    if (state.zone===5) { // lava seep
+      ctx.fillStyle='rgba(255,80,0,0.3)';
+      ctx.fillRect(x+Math.floor(n2*20)+4, y+10, 1, 10);
+    }
+    return;
+  }
+
+  // ---- MINE NODE ----
+  if (tileType === 5) {
+    // Mountain base
+    ctx.fillStyle='#504040'; ctx.fillRect(x,y,T,T);
+    ctx.fillStyle='#605050'; ctx.fillRect(x,y,T,T/2);
+    // Mine entrance
+    ctx.fillStyle='#1a1010'; ctx.fillRect(x+6,y+12,T-12,T-14);
+    ctx.fillStyle='#302020'; ctx.fillRect(x+8,y+10,T-16,4); // lintel
+    ctx.fillStyle='#5a4030'; ctx.fillRect(x+7,y+9,3,T-10); // left post
+    ctx.fillRect(x+T-10,y+9,3,T-10); // right post
+    // Ore sparkle (zone-specific color)
+    const oreColors = ['#808080','#808080','#d4a010','#80c0ff','#205840','#ff4010'];
+    const oc = oreColors[state.zone];
+    ctx.shadowBlur=6; ctx.shadowColor=oc;
+    ctx.fillStyle=oc;
+    for (let i=0;i<4;i++) {
+      const ox=8+Math.floor(((h*(i*3+1))&0xff)/255*12);
+      const oy=14+Math.floor(((h*(i*3+2))&0xff)/255*10);
+      ctx.fillRect(x+ox,y+oy,2,2);
+    }
+    ctx.shadowBlur=0;
+    // Mine [M] label
+    ctx.fillStyle='rgba(255,220,100,0.9)'; ctx.font='bold 8px monospace';
+    ctx.fillText('⛏ MINE',x+2,y+T-2);
+    return;
+  }
+
+  // ---- SHALLOW WATER ----
+  if (tileType === 6) {
+    const wc=z.waterColor||'#1a4060';
+    const wr=parseInt(wc.slice(1,3),16), wg=parseInt(wc.slice(3,5),16), wb=parseInt(wc.slice(5,7),16);
+    ctx.fillStyle=`rgb(${Math.min(wr+30,180)},${Math.min(wg+30,200)},${Math.min(wb+40,220)})`; ctx.fillRect(x,y,T,T);
+    // Sand/mud texture
+    ctx.fillStyle=`rgba(180,160,100,0.15)`; ctx.fillRect(x,y,T,T);
+    const time2=Date.now()/2000;
+    ctx.fillStyle=`rgba(200,230,255,${0.1+Math.sin(time2+tx+ty)*0.07})`;
+    ctx.fillRect(x+Math.floor(n2*20), y+Math.floor(n3*8)+4, 14, 1);
+    // Fishing spot indicator  
+    const map=state.zones[state.zone];
+    if (map.fishingSpots) {
+      const near=map.fishingSpots.some(s=>Math.abs(s.x/T-tx)<=1&&Math.abs(s.y/T-ty)<=1);
+      if (near) {
+        const tb=Math.floor((Date.now()/500)%8);
+        if (tb<4) { ctx.fillStyle='rgba(255,255,100,0.3)'; ctx.fillRect(x,y,T,T); }
+        ctx.fillStyle='rgba(255,255,150,0.9)'; ctx.font='bold 9px monospace';
+        if (n1<0.5) ctx.fillText('🎣',x+8,y+22);
+      }
+    }
+    return;
+  }
+}
+
+
+function isSolid(worldX, worldY) {
+  const map = state.zones[state.zone];
+  const tx = Math.floor(worldX / map.TILE);
+  const ty = Math.floor(worldY / map.TILE);
+  if (tx < 0 || ty < 0 || tx >= map.W || ty >= map.H) return true;
+  const t = map.tiles[ty][tx]; return t===1 || t===3 || t===4 || t===5; // wall, water, mountain, mine
+}
+
+// ===== COMBAT =====
+function dealDamage(target, amount, isPlayer = false) {
+  const def = target.def || 0;
+  const dmg = Math.max(1, amount - def + Math.floor(Math.random()*4-2));
+  target.hp = Math.max(0, target.hp - dmg);
+  
+  addFloatText(target.x, target.y - 20, '-' + dmg, isPlayer ? '#ff4040' : '#ffcc00');
+  
+  if (isPlayer) {
+    addLog(`${target.name || 'Enemy'} hit you for ${dmg}!`, 'damage');
+  } else {
+    addLog(`You hit ${target.name} for ${dmg}!`, 'info');
+  }
+  
+  return dmg;
+}
+
+function killEnemy(enemy) {
+  const gold = enemy.gold[0] + Math.floor(Math.random() * (enemy.gold[1] - enemy.gold[0]));
+  gainXP(enemy.xp);
+
+  // Spawn loot bag on ground
+  spawnGroundLoot(enemy.x, enemy.y, enemy.tier || 0, gold);
+
+  addLog(enemy.name + ' slain! +' + enemy.xp + 'XP — loot dropped!', 'xp');
+
+  // Quest progress
+  updateQuest(enemy.name);
+
+  // Death particles
+  for (let i = 0; i < 10; i++) {
+    state.player.particles.push({
+      x: enemy.x, y: enemy.y,
+      vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5,
+      life: 40, color: enemy.color, size: 5
+    });
+  }
+
+  // Remove enemy
+  const idx = state.entities.indexOf(enemy);
+  if (idx !== -1) state.entities.splice(idx, 1);
+}
+
+function gainXP(amount) {
+  state.player.xp += amount;
+  if (state.player.xp >= state.player.xpNext) {
+    levelUp();
+  }
+  updateHUD();
+}
+
+function levelUp() {
+  state.player.xp -= state.player.xpNext;
+  state.player.level++;
+  state.player.xpNext = Math.floor(state.player.xpNext * 1.4);
+  state.player.maxHp += 15;
+  state.player.hp = state.player.maxHp;
+  state.player.maxMp += 5;
+  state.player.mp = state.player.maxMp;
+  state.player.atk += 3;
+  state.player.def += 1;
+  state.player.str += 2;
+  
+  addLog(`LEVEL UP! Now level ${state.player.level}!`, 'xp');
+  setTimeout(saveWalletProgress, 600);
+  showLevelUp();
+  updateHUD();
+  updateStats();
+}
+
+function showLevelUp() {
+  const el = document.getElementById('levelUp');
+  el.style.opacity = 1;
+  setTimeout(() => { el.style.opacity = 0; }, 2000);
+}
+
+// ===== SKILLS =====
+const skillCooldowns = new Array(5).fill(0);
+function useSkill(idx) {
+  const skill = state.player.skills[idx];
+  if (skillCooldowns[idx] > 0) return;
+  if (state.player.mp < skill.mpCost) { addLog('Not enough MP!', 'damage'); return; }
+  
+  state.player.mp -= skill.mpCost;
+  skillCooldowns[idx] = skill.maxCd;
+  
+  if (skill.heal) {
+    state.player.hp = Math.min(state.player.maxHp, state.player.hp + skill.heal);
+    addFloatText(state.player.x, state.player.y-20, '+'+skill.heal, '#60cc60');
+    addLog(`Used ${skill.name}: +${skill.heal} HP`, 'heal');
+  }
+  
+  if (skill.dmgMult && state.player.target) {
+    const enemy = state.entities.find(e => e === state.player.target);
+    if (enemy) {
+      const dmg = Math.floor(state.player.atk * skill.dmgMult);
+      dealDamage(enemy, dmg);
+      if (skill.stun) enemy.stunTimer = 2000;
+      if (enemy.hp <= 0) killEnemy(enemy);
+    }
+  }
+  
+  if (skill.dash) {
+    const dx = state.mouse.x + state.camera.x - state.player.x;
+    const dy = state.mouse.y + state.camera.y - state.player.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > 0) {
+      const dashDist = 100;
+      state.player.x += (dx/dist) * dashDist;
+      state.player.y += (dy/dist) * dashDist;
+    }
+  }
+  
+  updateHUD();
+}
+
+// ===== QUEST SYSTEM =====
+function updateQuest(target) {
+  state.quests.forEach(q => {
+    if (!q.done && q.target === target) {
+      q.current++;
+      addLog(`Quest: ${q.name} ${q.current}/${q.count}`, 'quest');
+      if (q.current >= q.count) completeQuest(q);
+    }
+  });
+  updateQuestPanel();
+}
+
+function completeQuest(q) {
+  q.done = true;
+  gainXP(q.reward.xp);
+  state.player.gold += q.reward.gold;
+  if (q.reward.item) addToBag({...ITEMS[q.reward.item]});
+  addLog(`Quest Complete: ${q.name}! +${q.reward.xp}XP +${q.reward.gold}G`, 'xp');
+  updateGoldDisplay();
+}
+
+function addToBag(item) {
+  const existing = state.player.bag.find(i => i.id === item.id && i.type === 'consumable');
+  if (existing) { existing.count = (existing.count||1) + 1; }
+  else if (state.player.bag.length < 24) state.player.bag.push(item);
+  updateInventoryUI();
+}
+
+// ===== DIALOGUES =====
+const DIALOGUES = {
+  wanderer: {
+    npcName: 'Elder Garan',
+    text: 'Welcome, young warrior. These ruins hold ancient dangers. Prove your worth by slaying the Goblin Scouts that plague our lands.',
+    options: [
+      { label: 'Accept Quest: First Blood', action: () => acceptQuest(0) },
+      { label: 'Tell me about this land.', action: () => showDialogue('wanderer2') },
+      { label: 'Farewell.', action: closeDialogue }
+    ]
+  },
+  wanderer2: {
+    npcName: 'Elder Garan',
+    text: 'Three zones lie ahead: the Elven Ruins, the Dark Forest, and the Crystal Caves. Each more dangerous than the last. Grow strong before venturing deep.',
+    options: [{ label: 'I understand.', action: closeDialogue }]
+  },
+  fisher: {
+    npcName: 'Fisher Nara',
+    text: 'The waters here teem with life! Press M near any water to cast your line. The deeper the zone, the rarer the catch. I heard someone once pulled an Ancient Leviathan from the Crystal Lake!',
+    options: [
+      { text: 'Browse your wares', action: 'shop' },
+      { text: 'What can I catch?', response: 'River Trout are common, but keep fishing deep waters for the Golden Koi and the legendary Leviathan. And sometimes... you pull up strange things.' },
+      { text: 'Farewell', action: 'close' },
+    ]
+  },
+  armorer: {
+    npcName: 'Armorer Vex',
+    text: 'Buy cheap, die slow. That is my motto. Browse my armor and shields.',
+    options: [
+      { label: 'Browse Armor & Shields', action: () => { closeDialogue(); const n = state.entities.find(e => e.name === 'Armorer Vex'); if(n) openShop(n); } },
+      { label: 'Farewell.', action: closeDialogue }
+    ]
+  },
+  smith: {
+    npcName: 'Blacksmith Dorn',
+    text: 'Need iron? Bring me 5 iron pieces from slain foes and I\'ll forge you a proper sword.',
+    options: [
+      { label: 'Browse Weapons & Potions', action: () => { closeDialogue(); const n = state.entities.find(e => e.name === 'Blacksmith Dorn'); if(n) openShop(n); } },
+      { label: 'Accept Quest: Iron Will', action: () => acceptQuest(1) },
+      { label: 'Farewell.', action: closeDialogue }
+    ]
+  },
+  mage: {
+    npcName: 'Mage Selene',
+    text: 'The Crystal Caves pulse with ancient magic. Reach them and return to me with proof of your journey.',
+    options: [
+      { label: 'Accept Quest: Ancient Secrets', action: () => acceptQuest(2) },
+      { label: 'Farewell.', action: closeDialogue }
+    ]
+  }
+};
+
+// ===== SHOP SYSTEM =====
+let shopState = { tab: 'buy', shopType: null, selected: null, npcName: '' };
+
+function openShop(npc) {
+  shopState.tab = 'buy';
+  shopState.shopType = npc.shopType;
+  shopState.npcName = npc.shopTitle;
+  shopState.selected = null;
+  document.getElementById('shopTitle').textContent = npc.shopTitle;
+  document.getElementById('shopGoldDisplay').textContent = state.player.gold;
+  document.getElementById('tab-buy').classList.add('active');
+  document.getElementById('tab-sell').classList.remove('active');
+  renderShopList();
+  document.getElementById('shopPanel').style.display = 'block';
+  closeDialogue();
+}
+
+function closeShop() {
+  document.getElementById('shopPanel').style.display = 'none';
+  shopState.selected = null;
+}
+
+function switchShopTab(tab) {
+  shopState.tab = tab;
+  shopState.selected = null;
+  document.getElementById('tab-buy').classList.toggle('active', tab === 'buy');
+  document.getElementById('tab-sell').classList.toggle('active', tab === 'sell');
+  renderShopList();
+}
+
+function renderShopList() {
+  const list = document.getElementById('shopList');
+  list.innerHTML = '';
+  document.getElementById('shopDetail').innerHTML = '<div class="shop-empty">Select an item</div>';
+
+  if (shopState.tab === 'buy') {
+    const stock = SHOP_STOCK[shopState.shopType] || [];
+    stock.forEach((entry, i) => {
+      const item = ITEMS[entry.id];
+      if (!item) return;
+      const r = RARITY[item.rarity || 0];
+      const canAfford = state.player.gold >= entry.price;
+      const div = document.createElement('div');
+      div.className = 'shop-item';
+      div.innerHTML = `
+        <div class="si-icon">${item.icon}</div>
+        <div class="si-info">
+          <div class="si-name">${item.name}</div>
+          <div class="si-rarity" style="color:${r.color}">${r.name}</div>
+          <div class="si-stats">${getItemStatStr(item)}</div>
+        </div>
+        <div class="si-price" style="color:${canAfford ? '#f0c040' : '#884400'}">${entry.price} 🪙</div>`;
+      div.onclick = () => selectShopItem(entry, item, 'buy', div);
+      list.appendChild(div);
+    });
+  } else {
+    // Sell tab — show player bag items
+    if (state.player.bag.length === 0) {
+      list.innerHTML = '<div class="shop-empty">Your bag is empty.</div>';
+      return;
+    }
+    state.player.bag.forEach((item, i) => {
+      if (!item) return;
+      const r = RARITY[item.rarity || 0];
+      const sellPrice = getSellPrice(item);
+      const div = document.createElement('div');
+      div.className = 'shop-item';
+      div.innerHTML = `
+        <div class="si-icon">${item.icon}</div>
+        <div class="si-info">
+          <div class="si-name">${item.name}${item.count > 1 ? ' x'+item.count : ''}</div>
+          <div class="si-rarity" style="color:${r.color}">${r.name}</div>
+          <div class="si-stats">${getItemStatStr(item)}</div>
+        </div>
+        <div class="si-price" style="color:#40c0f0">${sellPrice} 🪙</div>`;
+      div.onclick = () => selectShopItem({ id: item.id, price: sellPrice }, item, 'sell', div, i);
+      list.appendChild(div);
+    });
+  }
+}
+
+function getItemStatStr(item) {
+  const parts = [];
+  if (item.atk) parts.push('+' + item.atk + ' ATK');
+  if (item.def) parts.push('+' + item.def + ' DEF');
+  if (item.spd) parts.push('+' + item.spd + ' SPD');
+  if (item.heal) parts.push('Heal ' + item.heal + ' HP');
+  if (item.mp) parts.push('Restore ' + item.mp + ' MP');
+  return parts.join(' · ') || item.desc;
+}
+
+function getSellPrice(item) {
+  // Find buy price from shop stock
+  for (const stock of Object.values(SHOP_STOCK)) {
+    const entry = stock.find(e => e.id === item.id);
+    if (entry) return Math.max(1, Math.floor(entry.price * 0.4));
+  }
+  // Fallback by rarity
+  const base = [10, 30, 80, 200][item.rarity || 0];
+  return Math.floor(base * (0.8 + Math.random() * 0.4));
+}
+
+function selectShopItem(entry, item, mode, el, bagIdx) {
+  document.querySelectorAll('.shop-item').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  shopState.selected = { entry, item, mode, bagIdx };
+
+  const r = RARITY[item.rarity || 0];
+  const detail = document.getElementById('shopDetail');
+
+  if (mode === 'buy') {
+    const canAfford = state.player.gold >= entry.price;
+    const alreadyOwn = state.player.bag.find(i => i && i.id === item.id)
+                    || (item.type !== 'consumable' && state.player.equipment[item.type] && state.player.equipment[item.type].id === item.id);
+    detail.innerHTML = `
+      <div class="sd-icon">${item.icon}</div>
+      <div class="sd-name">${item.name}</div>
+      <div class="sd-rarity" style="color:${r.color}">${r.name.toUpperCase()}</div>
+      <div class="sd-stats">${getItemStatStr(item)}</div>
+      <div class="sd-desc">${item.desc}</div>
+      <div class="sd-price">${entry.price} 🪙</div>
+      <button class="sd-btn buy" onclick="buyItem()" ${!canAfford ? 'disabled' : ''}>${canAfford ? 'BUY' : 'NOT ENOUGH GOLD'}</button>`;
+  } else {
+    detail.innerHTML = `
+      <div class="sd-icon">${item.icon}</div>
+      <div class="sd-name">${item.name}</div>
+      <div class="sd-rarity" style="color:${r.color}">${r.name.toUpperCase()}</div>
+      <div class="sd-stats">${getItemStatStr(item)}</div>
+      <div class="sd-desc">${item.desc}</div>
+      <div class="sd-price">${entry.price} 🪙 <span style="font-size:9px;color:#888">(sell value)</span></div>
+      <button class="sd-btn sell" onclick="sellItem()">SELL</button>`;
+  }
+}
+
+function buyItem() {
+  const sel = shopState.selected;
+  if (!sel || sel.mode !== 'buy') return;
+  if (state.player.gold < sel.entry.price) { addLog('Not enough gold!', 'damage'); return; }
+  if (state.player.bag.length >= 16) { addLog('Bag is full!', 'damage'); return; }
+
+  state.player.gold -= sel.entry.price;
+  addToBag({...sel.item, count: 1});
+  addLog('Bought ' + sel.item.name + ' for ' + sel.entry.price + 'G', 'xp');
+  addFloatText(state.player.x, state.player.y - 30, '-' + sel.entry.price + 'G', '#f0c040');
+
+  document.getElementById('shopGoldDisplay').textContent = state.player.gold;
+  updateGoldDisplay();
+  shopState.selected = null;
+  renderShopList();
+  updateHUD();
+}
+
+function sellItem() {
+  const sel = shopState.selected;
+  if (!sel || sel.mode !== 'sell') return;
+  const bagIdx = sel.bagIdx;
+  const item = state.player.bag[bagIdx];
+  if (!item) return;
+
+  const price = sel.entry.price;
+  state.player.gold += price;
+
+  if (item.count && item.count > 1) {
+    item.count--;
+  } else {
+    state.player.bag.splice(bagIdx, 1);
+  }
+
+  addLog('Sold ' + item.name + ' for ' + price + 'G', 'xp');
+  addFloatText(state.player.x, state.player.y - 30, '+' + price + 'G', '#f0c040');
+  document.getElementById('shopGoldDisplay').textContent = state.player.gold;
+  updateGoldDisplay();
+  shopState.selected = null;
+  renderShopList();
+  updateInventoryUI();
+}
+
+function openNearbyShop() {
+  // Find nearest shop NPC
+  let nearest = null, nearDist = 999;
+  state.entities.forEach(e => {
+    if (e.type === 'npc' && e.isShop) {
+      const d = Math.hypot(state.player.x - e.x, state.player.y - e.y);
+      if (d < nearDist) { nearDist = d; nearest = e; }
+    }
+  });
+  if (nearest && nearDist < 120) {
+    openShop(nearest);
+  } else {
+    addLog('No shop nearby! Walk close to a shopkeeper.', 'info');
+  }
+}
+
+function showDialogue(key) {
+  const d = DIALOGUES[key];
+  document.getElementById('dialogueNPC').textContent = d.npcName;
+  document.getElementById('dialogueText').textContent = d.text;
+  const opts = document.getElementById('dialogueOptions');
+  opts.innerHTML = '';
+  d.options.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'dialogue-btn';
+    btn.textContent = '▶ ' + o.label;
+    btn.onclick = o.action;
+    opts.appendChild(btn);
+  });
+  document.getElementById('dialogue').style.display = 'block';
+}
+
+function closeDialogue() { document.getElementById('dialogue').style.display = 'none'; }
+
+function acceptQuest(id) {
+  const q = {...QUEST_DEFS[id]};
+  if (!state.quests.find(x => x.id === id)) {
+    state.quests.push(q);
+    addLog(`New Quest: ${q.name}`, 'quest');
+    updateQuestPanel();
+  }
+  closeDialogue();
+}
+
+// ===== HUD =====
+function updateHUD() {
+  const p = state.player;
+  document.getElementById('hpBar').style.width = (p.hp/p.maxHp*100)+'%';
+  document.getElementById('mpBar').style.width = (p.mp/p.maxMp*100)+'%';
+  document.getElementById('xpBar').style.width = (p.xp/p.xpNext*100)+'%';
+  document.getElementById('hpText').textContent = p.hp+'/'+p.maxHp;
+  document.getElementById('mpText').textContent = p.mp+'/'+p.maxMp;
+  document.getElementById('xpText').textContent = p.xp+'/'+p.xpNext;
+  document.getElementById('levelDisplay').textContent = p.level;
+}
+
+function updateGoldDisplay() {
+  const g = state.player.gold;
+  ['statGold','invGoldDisplay','shopGoldDisplay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = g;
+  });
+}
+
+function updateStats() {
+  const p = state.player;
+  document.getElementById('statStr').textContent = p.str;
+  document.getElementById('statDex').textContent = p.dex;
+  document.getElementById('statInt').textContent = p.int;
+  document.getElementById('statCon').textContent = p.con;
+  document.getElementById('statAtk').textContent = p.atk;
+  document.getElementById('statDef').textContent = p.def;
+  document.getElementById('statSpd').textContent = p.speed.toFixed(1);
+  updateGoldDisplay();
+}
+
+function updateQuestPanel() {
+  const list = document.getElementById('questList');
+  list.innerHTML = '';
+  state.quests.forEach(q => {
+    const div = document.createElement('div');
+    div.className = 'quest-item' + (q.done ? ' done' : '');
+    div.textContent = (q.done ? '✓ ' : '• ') + q.name + ': ' + q.desc + (q.target !== 'zone' ? ` (${q.current}/${q.count})` : '');
+    list.appendChild(div);
+  });
+}
+
+function unequipSlot(slot) {
+  const item = state.player.equipment[slot];
+  if (!item) return;
+  if (state.player.bag.length >= 16) { addLog('Bag is full!', 'damage'); return; }
+  if (item.atk) state.player.atk -= item.atk;
+  if (item.def) state.player.def -= item.def;
+  if (item.spd) state.player.speed -= item.spd;
+  state.player.equipment[slot] = null;
+  state.player.bag.push(item);
+  addLog('Unequipped ' + item.name, 'info');
+  updateInventoryUI();
+  updateStats();
+}
+
+function updateInventoryUI() {
+  updateGoldDisplay();
+  // Equipment slots
+  ['head','chest','legs','weapon','offhand','boots'].forEach(slot => {
+    const el = document.getElementById('slot-'+slot);
+    const item = state.player.equipment[slot];
+    const c = el.querySelector('canvas');
+    const ctx2 = c.getContext('2d');
+    ctx2.clearRect(0,0,40,40);
+    if (item) {
+      el.classList.add('filled');
+      ctx2.fillStyle = item.color;
+      ctx2.font = '22px serif';
+      ctx2.textAlign = 'center';
+      ctx2.fillText(item.icon, 20, 28);
+      el.title = item.name + ' [Click to unequip]';
+      el.onclick = () => unequipSlot(slot);
+    } else {
+      el.classList.remove('filled');
+      el.title = slot.toUpperCase() + ' (empty)';
+      el.onclick = null;
+    }
+  });
+  
+  // Bag
+  const bag = document.getElementById('bagGrid');
+  bag.innerHTML = '';
+  for (let i = 0; i < 16; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'bag-item';
+    const item = state.player.bag[i];
+    if (item) {
+      cell.textContent = item.icon;
+      cell.title = item.name;
+      if (item.count > 1) {
+        const cnt = document.createElement('div');
+        cnt.className = 'item-count';
+        cnt.textContent = item.count;
+        cell.appendChild(cnt);
+      }
+      cell.onclick = () => useBagItem(i);
+    }
+    bag.appendChild(cell);
+  }
+}
+
+function useBagItem(idx) {
+  const item = state.player.bag[idx];
+  if (!item) return;
+  
+  if (item.type === 'consumable' || item.type === 'fish') {
+    if (item.heal) {
+      state.player.hp = Math.min(state.player.maxHp, state.player.hp + item.heal);
+      addFloatText(state.player.x, state.player.y-20, '+'+item.heal+' HP', '#60cc60');
+    }
+    if (item.mp) {
+      state.player.mp = Math.min(state.player.maxMp, state.player.mp + item.mp);
+      addFloatText(state.player.x, state.player.y-20, '+'+item.mp+' MP', '#6090cc');
+    }
+    item.count = (item.count||1) - 1;
+    if (item.count <= 0) state.player.bag.splice(idx, 1);
+    addLog(`Used ${item.name}`, 'heal');
+    updateHUD();
+    updateInventoryUI();
+  } else if (['head','chest','legs','weapon','offhand','boots'].includes(item.type)) {
+    // Equip
+    const old = state.player.equipment[item.type];
+    state.player.equipment[item.type] = item;
+    if (item.atk) state.player.atk += item.atk;
+    if (item.def) state.player.def += item.def;
+    if (item.spd) state.player.speed += item.spd;
+    state.player.bag.splice(idx, 1);
+    if (old) state.player.bag.push(old);
+    addLog(`Equipped ${item.name}`, 'info');
+    updateInventoryUI();
+    updateStats();
+  }
+}
+
+// ===== FLOAT TEXTS =====
+function addFloatText(x, y, text, color) {
+  state.floatTexts.push({ x, y, text, color, life: 60, vy: -1 });
+}
+
+function addLog(text, type) {
+  const log = document.getElementById('combatLog');
+  const div = document.createElement('div');
+  div.className = 'log-' + type;
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  while (log.children.length > 30) log.removeChild(log.firstChild);
+}
+
+// ===== ZONE TRANSITION =====
+function changeZone(toZone) {
+  if (state.transitioning) return;
+  state.transitioning = true;
+  
+  const map = state.zones[toZone];
+  state.zone = toZone;
+  state.player.x = Math.floor(map.W/2) * map.TILE;
+  state.player.y = Math.floor(map.H/2) * map.TILE;
+  state.entities = [...spawnEnemies(toZone), ...spawnNPCs(toZone)];
+  state.groundLoot = [];
+  
+  // Quest: reach Crystal Caves
+  if (toZone === 2) updateQuest('zone');
+  
+  showZoneBanner(ZONE_DEFS[toZone].name, ZONE_DEFS[toZone].sub);
+  setTimeout(saveWalletProgress, 1000); // save after zone loads
+  
+  setTimeout(() => { state.transitioning = false; }, 1000);
+}
+
+function showZoneBanner(name, sub) {
+  document.getElementById('zoneNameBig').textContent = name;
+  document.getElementById('zoneSubBig').textContent = sub;
+  document.getElementById('minimapLabel').textContent = name;
+  const el = document.getElementById('zoneBanner');
+  el.style.opacity = 1;
+  setTimeout(() => { el.style.opacity = 0; }, 2500);
+}
+
+// ===== MINIMAP =====
+function drawMinimap() {
+  const map = state.zones[state.zone];
+  const z = ZONE_DEFS[state.zone];
+  const mw = 120, mh = 120;
+  const mx = canvas.width - mw - 8, my = 8;
+  const tw = mw/map.W, th = mh/map.H;
+
+  // Background
+  ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillRect(mx-1,my-1,mw+2,mh+2);
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1; ctx.strokeRect(mx-1,my-1,mw+2,mh+2);
+
+  // Draw tiles
+  for (let ty=0;ty<map.H;ty++) for (let tx=0;tx<map.W;tx++) {
+    const t=map.tiles[ty][tx];
+    if (t===0) ctx.fillStyle=z.grassColor;
+    else if (t===1) ctx.fillStyle=z.wallColor;
+    else if (t===2) ctx.fillStyle=z.pathColor;
+    else if (t===3) ctx.fillStyle='#1a4080';
+    else if (t===4) ctx.fillStyle='#604040';
+    else if (t===5) ctx.fillStyle='#e08020';
+    else if (t===6) ctx.fillStyle='#1a6090';
+    else continue;
+    ctx.fillRect(mx+tx*tw, my+ty*th, Math.max(1,tw), Math.max(1,th));
+  }
+
+  // Exit markers
+  map.exits.forEach(e=>{
+    ctx.fillStyle='#ffff00';
+    ctx.fillRect(mx+e.x/map.TILE*tw-1, my+e.y/map.TILE*th-1, 3, 3);
+  });
+
+  // Player dot
+  const px2=mx+(state.player.x/map.TILE)*tw;
+  const py2=my+(state.player.y/map.TILE)*th;
+  ctx.fillStyle='#ffffff'; ctx.fillRect(px2-2,py2-2,5,5);
+  ctx.fillStyle='#ff4444'; ctx.fillRect(px2-1,py2-1,3,3);
+
+  // Zone name
+  ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='7px monospace';
+  ctx.fillText(z.name,mx+2,my+mh-3);
+
+  // Legend icons
+  if (z.hasFishing) { ctx.fillStyle='#60ccff'; ctx.font='8px serif'; ctx.fillText('🎣',mx+2,my+11); }
+  if (z.hasMine)    { ctx.fillStyle='#ffcc60'; ctx.font='8px serif'; ctx.fillText('⛏',mx+12,my+11); }
+}
+
+
+// ===== PANELS =====
+// ===== FISHING + MINING UI OVERLAY =====
+function drawFishingMiningOverlay() {
+  const W = canvas.width, H = canvas.height;
+  const f = state.fishing, m = state.mining;
+
+  // --- FISHING OVERLAY ---
+  if (f.active) {
+    const cx = W/2, cy = H - 120;
+    // Dark panel
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,10,20,0.85)';
+    ctx.fillRect(cx-130, cy-40, 260, 70);
+    ctx.strokeStyle = '#1a4060';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx-130, cy-40, 260, 70);
+
+    if (!f.caught) {
+      // Bobber animation
+      const bobAmt = Math.sin(f.bobTimer * 3) * 4;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '20px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('🎣', cx-80, cy - 10 + bobAmt);
+
+      // Wait progress bar
+      const prog = Math.min(f.timer / f.waitTime, 1);
+      ctx.fillStyle = '#1a3a50';
+      ctx.fillRect(cx-60, cy-18, 180, 10);
+      ctx.fillStyle = prog > 0.8 ? '#ff8020' : '#2080c0';
+      ctx.fillRect(cx-60, cy-18, 180 * prog, 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.15)';
+      ctx.fillRect(cx-60, cy-18, 180 * prog, 4);
+
+      ctx.fillStyle = '#8ab8d0';
+      ctx.font = '11px monospace';
+      ctx.fillText('WAITING FOR BITE...', cx+30, cy+8);
+      ctx.fillStyle = '#506070';
+      ctx.font = '10px monospace';
+      ctx.fillText('[F] to reel in when it bites!', cx+30, cy+24);
+    } else {
+      // BITE! flash
+      const flash = Math.sin(Date.now() * 0.015) > 0;
+      ctx.fillStyle = flash ? '#ffcc20' : '#ff8800';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 12;
+      ctx.fillText('🐟 BITE! PRESS F TO REEL IN!', cx, cy+2);
+      ctx.shadowBlur = 0;
+
+      if (f.catchItem) {
+        const r = RARITY[f.catchItem.rarity];
+        ctx.fillStyle = r.color;
+        ctx.font = '11px monospace';
+        ctx.fillText(`Catching: ${f.catchItem.icon} ${f.catchItem.name} [${r.name}]`, cx, cy+22);
+      }
+    }
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  // --- MINING OVERLAY ---
+  if (m.active) {
+    const cx = W/2, cy = H - 120;
+    ctx.save();
+    ctx.fillStyle = 'rgba(20,10,0,0.88)';
+    ctx.fillRect(cx-130, cy-40, 260, 70);
+    ctx.strokeStyle = '#604020';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx-130, cy-40, 260, 70);
+
+    const prog = Math.min(m.progress / m.mineTime, 1);
+
+    // Pickaxe icon
+    ctx.font = '20px monospace';
+    ctx.textAlign = 'center';
+    const swing = Math.sin(Date.now() * 0.012) * 0.4;
+    ctx.translate(cx - 80, cy - 10);
+    ctx.rotate(swing);
+    ctx.fillText('⛏', 0, 0);
+    ctx.rotate(-swing);
+    ctx.translate(-(cx-80), -(cy-10));
+
+    // Progress bar
+    ctx.fillStyle = '#302010';
+    ctx.fillRect(cx-60, cy-18, 180, 10);
+    const mineColors = ['#808080','#808080','#d4a010','#80c0ff','#205840','#ff4010'];
+    ctx.fillStyle = mineColors[state.zone] || '#d4a010';
+    ctx.fillRect(cx-60, cy-18, 180 * prog, 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(cx-60, cy-18, 180 * prog, 4);
+
+    ctx.fillStyle = '#c08040';
+    ctx.font = '11px monospace';
+    ctx.fillText('MINING... ' + Math.floor(prog * 100) + '%', cx+20, cy+8);
+    ctx.fillStyle = '#806040';
+    ctx.font = '10px monospace';
+    ctx.fillText('Move to cancel', cx+20, cy+24);
+
+    ctx.textAlign = 'left';
+    ctx.restore();
+  }
+
+  // --- ZONE FEATURE HINTS (near relevant tiles) ---
+  const map = state.zones[state.zone];
+  const px2 = state.player.x - state.camera.x;
+  const py2 = state.player.y - state.camera.y;
+
+  // Fishing spot nearby hint
+  if (map.hasFishing && !f.active && map.fishingSpots) {
+    const nearSpot = map.fishingSpots.find(s => {
+      const sx = s.x - state.camera.x, sy = s.y - state.camera.y;
+      return Math.hypot(px2-sx, py2-sy) < 70;
+    });
+    if (nearSpot) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,80,120,0.8)';
+      ctx.fillRect(px2-60, py2-60, 120, 24);
+      ctx.fillStyle = '#80ddff';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('🎣 Press M to fish!', px2, py2-42);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
+  }
+
+  // Mine node nearby hint
+  if (map.hasMine && !m.active) {
+    const tx = Math.floor(state.player.x / map.TILE);
+    const ty2 = Math.floor(state.player.y / map.TILE);
+    let nearMine = false;
+    for (let dy = -2; dy <= 2 && !nearMine; dy++) {
+      for (let dx = -2; dx <= 2 && !nearMine; dx++) {
+        const ntx = tx+dx, nty = ty2+dy;
+        if (ntx >= 0 && ntx < map.W && nty >= 0 && nty < map.H && map.tiles[nty] && map.tiles[nty][ntx] === 5)
+          nearMine = true;
+      }
+    }
+    if (nearMine) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(60,30,0,0.85)';
+      ctx.fillRect(px2-60, py2-60, 120, 24);
+      ctx.fillStyle = '#ffcc60';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('⛏ Press M to mine!', px2, py2-42);
+      ctx.textAlign = 'left';
+      ctx.restore();
+    }
+  }
+}
+
+function togglePanel(id) {  const el = document.getElementtById(id);
+  el.style.display = el.style.display === 'block' ? 'none' : 'block';
+  if (id === 'inventory') updateInventoryUI();
+  if (id === 'stats') updateStats();
+  if (id === 'questPanel') updateQuestPanel();
+}
+
+// ===== CLICK-TO-MOVE SYSTEM =====
+// Player movement destination and action state
+state.player.destX = state.player.x;
+state.player.destY = state.player.y;
+state.player.moveTarget = null;   // enemy or npc to walk towards
+state.player.moveAction = null;   // 'attack' | 'talk'
+state.player.clickFX = null;      // ground click visual
+
+// Cursor style based on hover
+canvas.addEventListener('mousemove', e => {
+  state.mouse.x = e.clientX;
+  state.mouse.y = e.clientY;
+  const wx = e.clientX + state.camera.x;
+  const wy = e.clientY + state.camera.y;
+  let hovering = false;
+  state.entities.forEach(ent => {
+    const dist = Math.hypot(wx - ent.x, wy - ent.y);
+    const hitSize = ent.type === 'enemy' ? ent.size + 10 : 24;
+    if (dist < hitSize) hovering = true;
+  });
+  canvas.style.cursor = hovering ? 'pointer' : 'crosshair';
+});
+
+canvas.addEventListener('click', e => {
+  if (state.transitioning) return;
+  const wx = e.clientX + state.camera.x;
+  const wy = e.clientY + state.camera.y;
+
+  // Check if clicking on enemy or NPC
+  let clickedEntity = null;
+  let clickedAction = null;
+
+  state.entities.forEach(ent => {
+    const dist = Math.hypot(wx - ent.x, wy - ent.y);
+    if (ent.type === 'enemy' && dist < ent.size + 10) {
+      clickedEntity = ent;
+      clickedAction = 'attack';
+    }
+    if (ent.type === 'npc' && dist < 28) {
+      clickedEntity = ent;
+      clickedAction = 'talk';
+    }
+  });
+
+  if (clickedEntity) {
+    // Walk towards entity, then act
+    state.player.moveTarget = clickedEntity;
+    state.player.moveAction = clickedAction;
+    state.player.destX = clickedEntity.x;
+    state.player.destY = clickedEntity.y;
+    if (clickedAction === 'attack') {
+      state.player.target = clickedEntity;
+      addLog(`Targeting ${clickedEntity.name}...`, 'info');
+    }
+  } else {
+    // Click on ground -> walk there
+    if (!isSolid(wx, wy)) {
+      state.player.destX = wx;
+      state.player.destY = wy;
+      state.player.moveTarget = null;
+      state.player.moveAction = null;
+      state.player.target = null;
+      // Ground click visual
+      state.player.clickFX = { x: wx, y: wy, life: 30 };
+    }
+  }
+});
+
+// Right-click to cancel action / deselect
+canvas.addEventListener('contextmenu', e => {
+  e.preventDefault();
+  state.player.moveTarget = null;
+  state.player.moveAction = null;
+  state.player.target = null;
+  state.player.destX = state.player.x;
+  state.player.destY = state.player.y;
+});
+
+// Keyboard shortcuts still work
+window.addEventListener('keydown', e => {
+  if (e.key === 'i') togglePanel('inventory');
+  if (e.key === 'c') togglePanel('stats');
+  if (e.key === 'q') togglePanel('questPanel');
+  if (e.key === 'Escape') { closeDialogue(); closeShop(); state.player.target = null; state.player.moveTarget = null; state.player.destX = state.player.x; state.player.destY = state.player.y; }
+  if (e.key === 'F5' || (e.key === 's' && e.ctrlKey)) { e.preventDefault(); saveWalletProgress(); }
+  if (e.key === 'f' || e.key === 'F') { reelIn(); }
+  if (e.key === 'm' || e.key === 'M') { tryMineOrFish(); }
+  if (e.key === '1') useSkill(0);
+  if (e.key === '2') useSkill(1);
+  if (e.key === '3') useSkill(2);
+  if (e.key === '4') useSkill(3);
+  if (e.key === '5') useSkill(4);
+});
+
+// ===== GAME LOOP =====
+function update(dt) {
+  const p = state.player;
+  const map = state.zones[state.zone];
+
+  // ---- CLICK-TO-MOVE ----
+  // If we have a moveTarget, keep dest updated to its position
+  if (p.moveTarget) {
+    const mt = state.entities.find(e => e === p.moveTarget);
+    // NPCs have no hp — only clear enemy targets if dead
+    if (!mt || (mt.type === 'enemy' && mt.hp <= 0)) {
+      p.moveTarget = null;
+      p.moveAction = null;
+    } else {
+      p.destX = mt.x;
+      p.destY = mt.y;
+    }
+  }
+
+  // Determine stop radius based on action
+  const stopRadius = (p.moveAction === 'attack') ? 50 :
+                     (p.moveAction === 'talk')   ? 55 : 4;
+
+  const ddx = p.destX - p.x;
+  const ddy = p.destY - p.y;
+  const distToDest = Math.hypot(ddx, ddy);
+
+  if (distToDest > stopRadius) {
+    // Move towards destination
+    const len = distToDest;
+    const nx = p.x + (ddx/len) * p.speed * (dt/16);
+    const ny = p.y + (ddy/len) * p.speed * (dt/16);
+
+    // Face direction of movement
+    if (Math.abs(ddx) > Math.abs(ddy)) p.facing = ddx > 0 ? 'right' : 'left';
+    else p.facing = ddy > 0 ? 'down' : 'up';
+
+    p.moving = true;
+    p.animTimer += dt;
+    if (p.animTimer > 140) { p.animFrame++; p.animTimer = 0; }
+
+    if (!isSolid(nx - 8, p.y) && !isSolid(nx + 8, p.y)) p.x = nx;
+    if (!isSolid(p.x, ny - 8) && !isSolid(p.x, ny + 8)) p.y = ny;
+
+  } else {
+    p.moving = false;
+
+    // Arrived — execute talk action ONCE then clear
+    if (p.moveAction === 'talk' && p.moveTarget) {
+      const npc = state.entities.find(e => e === p.moveTarget);
+      if (npc) {
+        p.facing = npc.x > p.x ? 'right' : 'left';
+        showDialogue(npc.dialogue);
+      }
+      // Clear immediately so this only fires once
+      p.moveTarget = null;
+      p.moveAction = null;
+      p.destX = p.x;
+      p.destY = p.y;
+    }
+    // Attack handled below via auto-attack
+  }
+
+  // Click FX decay
+  if (p.clickFX) { p.clickFX.life--; if (p.clickFX.life <= 0) p.clickFX = null; }
+
+  // Ground loot pickup — walk over to collect
+  state.groundLoot.forEach((bag, bi) => {
+    bag.life -= dt/16;
+    bag.pulse = (bag.pulse || 0) + dt * 0.004;
+    if (bag.life <= 0 || bag.collected) return;
+    const dist = Math.hypot(p.x - bag.x, p.y - bag.y);
+    if (dist < 28) {
+      // Collect gold
+      if (bag.gold > 0) {
+        p.gold += bag.gold;
+        addFloatText(p.x, p.y - 30, '+' + bag.gold + 'G', '#f0c040');
+        updateGoldDisplay();
+      }
+      // Collect items
+      bag.items.forEach(item => {
+        const r = RARITY[item.rarity || 0];
+        addToBag({...item});
+        addLog('Picked up: ' + item.name + ' [' + r.name + ']', 'xp');
+        addFloatText(p.x, p.y - 45, item.name + '!', r.color);
+      });
+      bag.collected = true;
+      // pickup particles
+      for (let i = 0; i < 6; i++) {
+        state.player.particles.push({
+          x: bag.x, y: bag.y,
+          vx: (Math.random()-0.5)*3, vy: -Math.random()*3,
+          life: 25, color: '#f0c040', size: 3
+        });
+      }
+    }
+  });
+  state.groundLoot = state.groundLoot.filter(b => !b.collected && b.life > 0);
+
+  // Zone exits
+  if (!state.transitioning) {
+    map.exits.forEach(exit => {
+      if (Math.hypot(p.x - exit.x, p.y - exit.y) < 48) {
+        changeZone(exit.toZone);
+      }
+    });
+  }
+  
+  // Attack timer
+  if (p.attackTimer > 0) p.attackTimer -= dt;
+  
+  // Auto-attack target
+  if (p.target && p.attackTimer <= 0) {
+    const enemy = state.entities.find(e => e === p.target);
+    if (enemy && enemy.hp > 0) {
+      const dist = Math.hypot(p.x - enemy.x, p.y - enemy.y);
+      if (dist < 55) {
+        dealDamage(enemy, p.atk);
+        p.attackTimer = 800;
+        if (enemy.hp <= 0) { killEnemy(enemy); p.target = null; p.moveTarget = null; p.moveAction = null; }
+      }
+    } else { p.target = null; }
+  }
+  
+  // Skill cooldowns
+  state.player.skills.forEach((s, i) => {
+    if (skillCooldowns[i] > 0) {
+      skillCooldowns[i] -= dt;
+      const el = document.getElementById('cd'+i);
+      if (skillCooldowns[i] > 0) {
+        el.style.display = 'block';
+        el.textContent = (skillCooldowns[i]/1000).toFixed(1);
+      } else {
+        el.style.display = 'none';
+        skillCooldowns[i] = 0;
+      }
+    }
+  });
+  
+  // MP regen
+  if (p.mp < p.maxMp) { p.mp = Math.min(p.maxMp, p.mp + dt * 0.003); updateHUD(); }
+  
+  // Enemy AI
+  state.entities.forEach(ent => {
+    if (ent.type !== 'enemy') return;
+    if (ent.stunTimer > 0) { ent.stunTimer -= dt; return; }
+    
+    const dist = Math.hypot(p.x - ent.x, p.y - ent.y);
+    
+    if (dist < 200) {
+      ent.alert = true;
+      const ex = (p.x - ent.x) / dist;
+      const ey = (p.y - ent.y) / dist;
+      const nx = ent.x + ex * ent.speed * (dt/16);
+      const ny = ent.y + ey * ent.speed * (dt/16);
+      if (!isSolid(nx, ent.y)) ent.x = nx;
+      if (!isSolid(ent.x, ny)) ent.y = ny;
+      
+      ent.animTimer = (ent.animTimer||0) + dt;
+      if (ent.animTimer > 200) { ent.animFrame++; ent.animTimer = 0; }
+      
+      // Attack player
+      if (dist < 36) {
+        ent.attackTimer = (ent.attackTimer||0) + dt;
+        if (ent.attackTimer > 1200) {
+          ent.attackTimer = 0;
+          if (p.invincible <= 0) {
+            const dmg = Math.max(1, ent.atk - p.def + Math.floor(Math.random()*3-1));
+            p.hp = Math.max(0, p.hp - dmg);
+            addFloatText(p.x, p.y-20, '-'+dmg, '#ff4040');
+            addLog(`${ent.name} hits you for ${dmg}!`, 'damage');
+            p.invincible = 500;
+            updateHUD();
+          }
+        }
+      }
+    } else {
+      ent.alert = false;
+    }
+    
+    if (p.invincible > 0) p.invincible -= dt;
+  });
+  
+  // Float texts
+  state.floatTexts.forEach(ft => { ft.y += ft.vy; ft.life--; });
+  state.floatTexts = state.floatTexts.filter(ft => ft.life > 0);
+  
+  // Particles
+  p.particles.forEach(pt => { pt.x += pt.vx; pt.y += pt.vy; pt.vy += 0.1; pt.life--; });
+  p.particles = p.particles.filter(pt => pt.life > 0);
+  
+  // Camera
+  state.camera.x += (p.x - canvas.width/2 - state.camera.x) * 0.1;
+  state.camera.y += (p.y - canvas.height/2 - state.camera.y) * 0.1;
+}
+
+function render() {
+  const map = state.zones[state.zone];
+  ctx.fillStyle = map.bgColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw tiles
+  const startTX = Math.floor(state.camera.x / map.TILE);
+  const endTX = startTX + Math.ceil(canvas.width / map.TILE) + 2;
+  const startTY = Math.floor(state.camera.y / map.TILE);
+  const endTY = startTY + Math.ceil(canvas.height / map.TILE) + 2;
+  
+  for (let ty = Math.max(0, startTY); ty < Math.min(map.H, endTY); ty++) {
+    for (let tx = Math.max(0, startTX); tx < Math.min(map.W, endTX); tx++) {
+      drawTile(tx, ty, map.tiles[ty][tx], map);
+    }
+  }
+  
+  // Draw zone exits
+  map.exits.forEach(exit => {
+    const ex = exit.x - state.camera.x;
+    const ey = exit.y - state.camera.y;
+    ctx.fillStyle = 'rgba(240,192,64,0.2)';
+    ctx.fillRect(ex-24, ey-24, 48, 48);
+    ctx.strokeStyle = '#f0c040';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ex-24, ey-24, 48, 48);
+    ctx.fillStyle = '#f0c040';
+    ctx.font = '10px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(exit.label, ex, ey-28);
+    ctx.textAlign = 'left';
+  });
+  
+  // ===== ZONE ATMOSPHERE OVERLAY =====
+  const atmoTime = Date.now();
+  if (state.zone === 1) { // Dark forest fog
+    const grad = ctx.createRadialGradient(canvas.width/2,canvas.height/2,100,canvas.width/2,canvas.height/2,canvas.width*0.7);
+    grad.addColorStop(0,'rgba(0,0,0,0)');
+    grad.addColorStop(1,'rgba(0,5,0,0.45)');
+    ctx.fillStyle=grad; ctx.fillRect(0,0,canvas.width,canvas.height);
+  } else if (state.zone === 3) { // Crystal caves glow
+    const grad2=ctx.createRadialGradient(canvas.width/2,canvas.height/2,80,canvas.width/2,canvas.height/2,canvas.width*0.6);
+    grad2.addColorStop(0,'rgba(40,40,120,0.1)');
+    grad2.addColorStop(1,'rgba(10,10,40,0.3)');
+    ctx.fillStyle=grad2; ctx.fillRect(0,0,canvas.width,canvas.height);
+  } else if (state.zone === 5) { // Volcanic heat shimmer
+    ctx.fillStyle='rgba(40,5,0,'+((Math.sin(atmoTime/800)*0.05+0.12))+')';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+  } else if (state.zone === 4) { // Marsh green tint
+    ctx.fillStyle='rgba(0,15,5,0.12)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // Draw ground loot bags
+  state.groundLoot.forEach(bag => {
+    const bx = bag.x - state.camera.x;
+    const by = bag.y - state.camera.y;
+    if (bx < -40 || bx > canvas.width+40 || by < -40 || by > canvas.height+40) return;
+
+    // Determine highest rarity in bag
+    let highRarity = 0;
+    bag.items.forEach(item => { if ((item.rarity||0) > highRarity) highRarity = item.rarity||0; });
+    const r = RARITY[highRarity];
+
+    // Glow for rare+
+    if (highRarity >= 1) {
+      const pulse = 0.5 + 0.5 * Math.sin(bag.pulse);
+      ctx.save();
+      ctx.globalAlpha = 0.35 * pulse;
+      ctx.fillStyle = r.glow || r.color;
+      ctx.beginPath();
+      ctx.arc(bx, by, 18 + pulse * 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Bag icon background
+    ctx.fillStyle = 'rgba(10,10,20,0.8)';
+    ctx.beginPath(); ctx.arc(bx, by, 12, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = highRarity >= 1 ? 2 : 1;
+    ctx.beginPath(); ctx.arc(bx, by, 12, 0, Math.PI*2); ctx.stroke();
+
+    // Bag emoji
+    ctx.font = '14px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('💰', bx, by + 5);
+    ctx.textAlign = 'left';
+
+    // Gold amount
+    if (bag.gold > 0) {
+      ctx.fillStyle = '#f0c040';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('+' + bag.gold + 'G', bx, by - 15);
+      ctx.textAlign = 'left';
+    }
+
+    // Rarity dots for items
+    bag.items.forEach((item, i) => {
+      const ir = RARITY[item.rarity||0];
+      ctx.fillStyle = ir.color;
+      ctx.beginPath();
+      ctx.arc(bx - 6 + i*6, by + 16, 3, 0, Math.PI*2);
+      ctx.fill();
+    });
+
+    // Despawn timer bar
+    const lifeRatio = Math.min(1, bag.life / 1800);
+    ctx.fillStyle = 'rgba(200,0,0,0.5)';
+    ctx.fillRect(bx - 12, by + 20, 24 * lifeRatio, 2);
+  });
+
+  // Sort entities + player by Y
+  const allDrawables = [
+    ...state.entities,
+    { type: 'player', ...state.player }
+  ].sort((a, b) => a.y - b.y);
+  
+  allDrawables.forEach(ent => {
+    const sx = ent.x - state.camera.x;
+    const sy = ent.y - state.camera.y;
+    
+    if (ent.type === 'player') {
+      // Selection ring on target
+      if (state.player.target) {
+        const te = state.entities.find(e => e === state.player.target);
+        if (te) {
+          const tx2 = te.x - state.camera.x;
+          const ty2 = te.y - state.camera.y;
+          ctx.strokeStyle = '#f0c040';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(tx2, ty2+te.size/2, te.size+4, te.size/3+2, 0, 0, Math.PI*2);
+          ctx.stroke();
+        }
+      }
+      drawPixelHero(sx, sy, ent.facing, ent.animFrame, ent.equipment);
+    } else if (ent.type === 'enemy') {
+      drawPixelEnemy(sx, sy, ent, ent.animFrame);
+    } else if (ent.type === 'npc') {
+      drawNPC(sx, sy, ent, ent.animFrame);
+    }
+  });
+  
+  // Particles
+  state.player.particles.forEach(pt => {
+    ctx.fillStyle = pt.color;
+    ctx.globalAlpha = pt.life / 30;
+    ctx.fillRect(pt.x - state.camera.x - pt.size/2, pt.y - state.camera.y - pt.size/2, pt.size, pt.size);
+  });
+  ctx.globalAlpha = 1;
+  
+  // Float texts
+  state.floatTexts.forEach(ft => {
+    ctx.globalAlpha = ft.life / 60;
+    ctx.fillStyle = ft.color;
+    ctx.font = 'bold 14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(ft.text, ft.x - state.camera.x, ft.y - state.camera.y);
+    ctx.textAlign = 'left';
+  });
+  ctx.globalAlpha = 1;
+  
+  // Ground click destination marker
+  if (state.player.clickFX) {
+    const fx = state.player.clickFX;
+    const alpha = fx.life / 30;
+    const radius = 14 * (1 - fx.life/30) + 6;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#88ff88';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(fx.x - state.camera.x, fx.y - state.camera.y, radius, 0, Math.PI * 2);
+    ctx.stroke();
+    // Cross
+    ctx.beginPath();
+    ctx.moveTo(fx.x - state.camera.x - 6, fx.y - state.camera.y);
+    ctx.lineTo(fx.x - state.camera.x + 6, fx.y - state.camera.y);
+    ctx.moveTo(fx.x - state.camera.x, fx.y - state.camera.y - 6);
+    ctx.lineTo(fx.x - state.camera.x, fx.y - state.camera.y + 6);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Move-to destination line (subtle)
+  if (state.player.moving && !state.player.moveTarget) {
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = '#88ff88';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(state.player.x - state.camera.x, state.player.y - state.camera.y);
+    ctx.lineTo(state.player.destX - state.camera.x, state.player.destY - state.camera.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Crosshair on mouse
+  if (state.player.target) {
+    const te = state.entities.find(e => e === state.player.target);
+    if (te) {
+      const dist = Math.hypot(state.player.x - te.x, state.player.y - te.y);
+      const col = dist < 55 ? '#00ff00' : '#ff8800';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      const mx = te.x - state.camera.x, my = te.y - state.camera.y;
+      ctx.beginPath(); ctx.moveTo(mx-8,my); ctx.lineTo(mx+8,my); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(mx,my-8); ctx.lineTo(mx,my+8); ctx.stroke();
+    }
+  }
+  
+  // Vignette overlay for atmosphere
+  const vgrad = ctx.createRadialGradient(
+    canvas.width/2, canvas.height/2, canvas.height*0.3,
+    canvas.width/2, canvas.height/2, canvas.height*0.85
+  );
+  vgrad.addColorStop(0, 'rgba(0,0,0,0)');
+  vgrad.addColorStop(1, 'rgba(0,0,0,0.55)');
+  ctx.fillStyle = vgrad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // ===== FISHING OVERLAY =====
+  if (state.fishing && state.fishing.active) {
+    const f = state.fishing;
+    const bw = 200, bh = 40, bx = canvas.width/2-bw/2, by = canvas.height-120;
+    ctx.fillStyle='rgba(0,20,40,0.88)'; ctx.fillRect(bx-2,by-2,bw+4,bh+4);
+    ctx.strokeStyle='#2060a0'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,bh);
+    if (!f.caught) {
+      const prog=Math.min(f.timer/f.waitTime,1);
+      ctx.fillStyle='#1040a0'; ctx.fillRect(bx+2,by+22,bw-4,14);
+      ctx.fillStyle='#40a0ff'; ctx.fillRect(bx+2,by+22,(bw-4)*prog,14);
+      ctx.fillStyle='#ffffff'; ctx.font='11px monospace';
+      ctx.fillText('Fishing... '+Math.floor(prog*100)+'%', bx+8, by+15);
+    } else {
+      ctx.fillStyle='#ffcc00'; ctx.shadowBlur=10; ctx.shadowColor='#ffcc00';
+      ctx.font='bold 13px monospace';
+      ctx.fillText('!! BITE !! Press F to reel in!', bx+6, by+bh/2+5);
+      ctx.shadowBlur=0;
+    }
+  }
+  // ===== MINING OVERLAY =====
+  if (state.mining && state.mining.active) {
+    const m=state.mining, prog=Math.min(m.progress/m.mineTime,1);
+    const bw=200, bh=40, bx=canvas.width/2-bw/2, by=canvas.height-120;
+    ctx.fillStyle='rgba(30,15,5,0.88)'; ctx.fillRect(bx-2,by-2,bw+4,bh+4);
+    ctx.strokeStyle='#a06020'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,bh);
+    ctx.fillStyle='#402010'; ctx.fillRect(bx+2,by+22,bw-4,14);
+    ctx.fillStyle='#e08020'; ctx.fillRect(bx+2,by+22,(bw-4)*prog,14);
+    ctx.fillStyle='#ffcc88'; ctx.font='11px monospace';
+    ctx.fillText('Mining... '+Math.floor(prog*100)+'%', bx+8, by+15);
+  }
+  // ===== INTERACTION HINTS =====
+  const _cm=state.zones[state.zone];
+  if (_cm && !state.fishing.active && !state.mining.active) {
+    if (_cm.hasFishing && _cm.fishingSpots) {
+      const ns=_cm.fishingSpots.find(s=>Math.hypot(state.player.x-s.x,state.player.y-s.y)<90);
+      if (ns) {
+        ctx.fillStyle='rgba(0,40,80,0.8)'; ctx.fillRect(canvas.width/2-80,canvas.height-82,160,22);
+        ctx.fillStyle='#80ddff'; ctx.font='10px monospace'; ctx.textAlign='center';
+        ctx.fillText('Press M near water to fish',canvas.width/2,canvas.height-66); ctx.textAlign='left';
+      }
+    }
+    if (_cm.hasMine) {
+      let nm=false;
+      for(let _ty=0;_ty<_cm.H&&!nm;_ty++) for(let _tx=0;_tx<_cm.W&&!nm;_tx++)
+        if(_cm.tiles[_ty]&&_cm.tiles[_ty][_tx]===5&&Math.hypot(state.player.x-(_tx+0.5)*_cm.TILE,state.player.y-(_ty+0.5)*_cm.TILE)<90) nm=true;
+      if(nm){
+        ctx.fillStyle='rgba(40,20,0,0.8)'; ctx.fillRect(canvas.width/2-75,canvas.height-82,150,22);
+        ctx.fillStyle='#ffcc88'; ctx.font='10px monospace'; ctx.textAlign='center';
+        ctx.fillText('Press M to mine ore',canvas.width/2,canvas.height-66); ctx.textAlign='left';
+      }
+    }
+  }
+
+  drawMinimap();
+}
+
+function gameLoop(timestamp) {
+  const dt = Math.min(timestamp - state.lastTime, 50);
+  state.lastTime = timestamp;
+  update(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+function tryMineOrFish() {
+  // Check nearest mine node
+  const map = state.zones[state.zone];
+  if (map.hasMine) {
+    let bestDist = 80, bestNode = null;
+    for (let ty=0; ty<map.H; ty++) for (let tx=0; tx<map.W; tx++) {
+      if (map.tiles[ty] && map.tiles[ty][tx]===5) {
+        const wx=(tx+0.5)*map.TILE, wy=(ty+0.5)*map.TILE;
+        const d=Math.hypot(state.player.x-wx, state.player.y-wy);
+        if (d<bestDist){bestDist=d;bestNode={tx,ty,wx,wy};}
+      }
+    }
+    if (bestNode) { startMining(bestNode.wx, bestNode.wy); return; }
+  }
+  // Check nearest fishing spot
+  if (map.hasFishing && map.fishingSpots) {
+    let bestDist=80, bestSpot=null;
+    for (const spot of map.fishingSpots) {
+      const d=Math.hypot(state.player.x-spot.x, state.player.y-spot.y);
+      if (d<bestDist){bestDist=d;bestSpot=spot;}
+    }
+    if (bestSpot) { startFishing(bestSpot); return; }
+  }
+  addLog('Nothing to interact with nearby. (M=mine, F=fish reel-in)', 'info');
+}
+
+// ===== EXPOSE GLOBALS (needed for onclick handlers in module scope) =====
+window.togglePanel = togglePanel;
+window.useSkill = useSkill;
+window.closeDialogue = closeDialogue;
+window.closeShop = closeShop;
+window.switchShopTab = switchShopTab;
+window.buyItem = buyItem;
+window.sellItem = sellItem;
+window.openNearbyShop = openNearbyShop;
+window.saveWalletProgress = saveWalletProgress;
+window.loginWithAbstract = loginWithAbstract;
+window.loginAsGuest = loginAsGuest;
+window.logoutWallet = logoutWallet;
+window.startGame = startGame;
+window.showWalletInfo = showWalletInfo;
+window.backToChoose = backToChoose;
+window.submitManualAddress = submitManualAddress;
+window.openInMetaMask = openInMetaMask;
+window.reelIn = reelIn;
+window.tryMineOrFish = tryMineOrFish;
+window.startFishing = startFishing;
+window.startMining = startMining;
+
+// ===== INIT =====
+updateHUD();
+updateStats();
+showZoneBanner(ZONE_DEFS[0].name, ZONE_DEFS[0].sub);
+addLog('Welcome to Chronicle of Eternity!', 'info');
+addLog('LEFT CLICK ground to move. Click enemy to chase & attack.', 'info');
+addLog('Click NPC to walk up and talk. RIGHT CLICK to cancel.', 'info');
+addLog('I=Inventory, C=Stats, Q=Quests | Skills: 1-5 keys', 'info');
+addLog('M = Mine ore (near mine nodes) | M = Fish (near water) | F = Reel in!', 'info');
+
+// Don't auto-start — login screen calls startGame() which then begins the loop
+// But we do kick off the loop now (login screen sits on top)
+requestAnimationFrame(gameLoop);
+
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
