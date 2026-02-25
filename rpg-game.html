@@ -3789,3 +3789,23 @@ window.addEventListener('load',()=>{
 canvas.addEventListener('contextmenu',e=>{if(!mpConnected)return;const wx=e.clientX+state.camera.x,wy=e.clientY+state.camera.y;Object.entries(otherPlayers).forEach(([id,p])=>{if(p.zone!==state.zone||Math.hypot(wx-p.x,wy-p.y)>60)return;e.preventDefault();e.stopImmediatePropagation();socket.emit('tradeRequest',{targetId:id,offer:[]});addChatMsg('cm-system','📦 Trade request sent!');});},true);
 setTimeout(connectMultiplayer,1500);
 </script>
+<script>
+// Fix: wait for canvas before adding listeners
+window.addEventListener('load', function() {
+  if (typeof canvas !== 'undefined') {
+    canvas.addEventListener('contextmenu', function(e) {
+      if (!window.mpConnected || !window.socket) return;
+      const wx = e.clientX + state.camera.x;
+      const wy = e.clientY + state.camera.y;
+      Object.entries(window.otherPlayers||{}).forEach(([id,p]) => {
+        if (p.zone !== state.zone) return;
+        if (Math.hypot(wx-p.x, wy-p.y) < 60) {
+          e.preventDefault(); e.stopImmediatePropagation();
+          window.socket.emit('tradeRequest', {targetId:id, offer:[]});
+          window.addChatMsg('cm-system', '📦 Trade request sent!');
+        }
+      });
+    }, true);
+  }
+});
+</script>
