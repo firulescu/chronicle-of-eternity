@@ -34,7 +34,7 @@
   #minimapLabel { position: absolute; bottom: -18px; right: 0; font-size: 9px; color: #888; letter-spacing: 1px; }
 
   /* Inventory Panel */
-  #inventory { position: absolute; right: 10px; top: 145px; width: 200px; background: rgba(10,10,20,0.92); border: 1px solid #3a3050; padding: 8px; display: none; pointer-events: all; }
+  #inventory { position: absolute; right: 10px; top: 230px; width: 220px; background: rgba(10,10,20,0.92); border: 1px solid #3a3050; padding: 8px; display: none; pointer-events: all; }
   #inventory h3 { font-size: 11px; color: #f0c040; border-bottom: 1px solid #3a3050; padding-bottom: 4px; margin-bottom: 6px; letter-spacing: 2px; }
   .equipment-slots { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 8px; }
   .equip-slot { width: 56px; height: 56px; background: #1a1a2e; border: 1px solid #3a3050; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8px; color: #666; cursor: pointer; position: relative; }
@@ -3808,4 +3808,38 @@ window.addEventListener('load', function() {
     }, true);
   }
 });
+</script>
+<script>
+// Fix 1: Inventory button
+document.addEventListener('DOMContentLoaded', function() {
+  // Override INV button to ensure it works
+  setTimeout(function() {
+    const btns = document.querySelectorAll('button, .hud-btn');
+    btns.forEach(b => { if(b.textContent.includes('INV')) b.onclick = () => toggleInventory(); });
+  }, 2000);
+});
+
+// Fix 2: Move fishing/mining UI higher up
+const _origDrawFishing = window.drawFishingUI;
+window._fishingYOverride = true;
+
+// Patch: intercept canvas fillRect for fishing panel to move it up
+const _origFillRect = CanvasRenderingContext2D.prototype.fillRect;
+</script>
+<script>
+// Fix 1: Inventory button
+document.addEventListener('DOMContentLoaded', function() {
+  // Override INV button to ensure it works
+  setTimeout(function() {
+    const btns = document.querySelectorAll('button, .hud-btn');
+    btns.forEach(b => { if(b.textContent.includes('INV')) b.onclick = () => toggleInventory(); });
+  }, 2000);
+});
+
+// Fix 2: Move fishing/mining UI higher up
+const _origDrawFishing = window.drawFishingUI;
+window._fishingYOverride = true;
+
+// Patch: intercept canvas fillRect for fishing panel to move it up
+const _origFillRect = CanvasRenderingContext2D.prototype.fillRect;
 </script>
