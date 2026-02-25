@@ -4068,3 +4068,47 @@ function acceptTrade(){if(!pendingTrade||!socket)return;socket.emit('tradeAccept
 function declineTrade(){if(!pendingTrade||!socket)return;socket.emit('tradeDecline',{fromId:pendingTrade.fromId});document.getElementById('tradeModal').style.display='none';pendingTrade=null;myTradeOffer=[];}
 </script>
 <!-- fisher fix applied -->
+<script>
+// Trade fix - right click other player to trade
+canvas.addEventListener('contextmenu', function(e) {
+  if (!window.mpConnected || !window.socket) return;
+  const wx = e.clientX + state.camera.x;
+  const wy = e.clientY + state.camera.y;
+  Object.entries(window.otherPlayers||{}).forEach(([id,p]) => {
+    if (p.zone !== state.zone) return;
+    if (Math.hypot(wx-p.x, wy-p.y) < 60) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      window.addChatMsg('cm-system', '📦 Trade request sent to '+(p.name||'player')+'!');
+      window.socket.emit('tradeRequest', {targetId:id, offer:[]});
+    }
+  });
+}, true);
+
+// Help popup
+function showHelp() {
+  let el = document.getElementById('helpBox');
+  if(el){el.remove();return;}
+  el = document.createElement('div');
+  el.id='helpBox';
+  el.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.95);border:2px solid #604020;padding:24px;font:13px monospace;color:#ddd;z-index:999;min-width:320px;';
+  el.innerHTML=`<div style="color:#f0c040;font-size:16px;margin-bottom:14px">🎮 HOW TO PLAY</div>
+<div style="line-height:2.2">
+🎣 <b style="color:#60ccff">FISHING</b> — walk near water, press <b style="color:#fff">M</b><br>
+&nbsp;&nbsp;&nbsp;When it bites, press <b style="color:#fff">F</b> to reel in!<br>
+⛏ <b style="color:#ffcc60">MINING</b> — go to Iron Mountains (zone 3)<br>
+&nbsp;&nbsp;&nbsp;Walk near ore node, press <b style="color:#fff">M</b><br>
+💬 <b style="color:#aaffaa">CHAT</b> — press <b style="color:#fff">T</b><br>
+🤝 <b style="color:#cc88ff">TRADE</b> — <b style="color:#fff">right-click</b> another player<br>
+⚔ <b style="color:#ff8888">PvP</b> — enable PvP button, then click player<br>
+🗺 <b style="color:#ffaa44">TRAVEL</b> — walk to map edges on brown paths
+</div>
+<button onclick="document.getElementById('helpBox').remove()" style="margin-top:16px;padding:7px 22px;background:#2a1040;border:1px solid #8040c0;color:#c080ff;font:12px monospace;cursor:pointer;width:100%">✓ GOT IT!</button>`;
+  document.body.appendChild(el);
+}
+// Help button
+const hb=document.createElement('div');
+hb.style.cssText='position:fixed;bottom:70px;right:90px;padding:5px 12px;font:bold 12px monospace;background:rgba(20,10,40,0.9);border:1px solid #8040c0;color:#c080ff;cursor:pointer;z-index:50;';
+hb.textContent='? HELP';hb.onclick=showHelp;
+document.body.appendChild(hb);
+setTimeout(showHelp, 1500);
+</script>
