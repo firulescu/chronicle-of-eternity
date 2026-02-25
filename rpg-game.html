@@ -3790,28 +3790,3 @@ canvas.addEventListener('contextmenu',e=>{if(!mpConnected)return;const wx=e.clie
 setTimeout(connectMultiplayer,1500);
 </script>
 <script>
-// Fix: wait for canvas before adding listeners
-window.addEventListener('load', function() {
-  if (typeof canvas !== 'undefined') {
-    canvas.addEventListener('contextmenu', function(e) {
-      if (!window.mpConnected || !window.socket) return;
-      const wx = e.clientX + state.camera.x;
-      const wy = e.clientY + state.camera.y;
-      Object.entries(window.otherPlayers||{}).forEach(([id,p]) => {
-        if (p.zone !== state.zone) return;
-        if (Math.hypot(wx-p.x, wy-p.y) < 60) {
-          e.preventDefault(); e.stopImmediatePropagation();
-          window.socket.emit('tradeRequest', {targetId:id, offer:[]});
-          window.addChatMsg('cm-system', '📦 Trade request sent!');
-        }
-      });
-    }, true);
-  }
-});
-</script>
-<script>
-// Fix 1: Inventory button
-document.addEventListener('DOMContentLoaded', function() {
-  // Override INV button to ensure it works
-  setTimeout(function() {
-    const btns = document.querySelectorAll('button, .hud-btn');
