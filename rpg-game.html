@@ -2897,7 +2897,7 @@ function drawFishingMiningOverlay() {
 
   // --- FISHING OVERLAY ---
   if (f.active) {
-    const cx = W/2, cy = H - 120;
+    const cx = W/2, cy = H - 280;
     // Dark panel
     ctx.save();
     ctx.fillStyle = 'rgba(0,10,20,0.85)';
@@ -2952,7 +2952,7 @@ function drawFishingMiningOverlay() {
 
   // --- MINING OVERLAY ---
   if (m.active) {
-    const cx = W/2, cy = H - 120;
+    const cx = W/2, cy = H - 280;
     ctx.save();
     ctx.fillStyle = 'rgba(20,10,0,0.88)';
     ctx.fillRect(cx-130, cy-40, 260, 70);
